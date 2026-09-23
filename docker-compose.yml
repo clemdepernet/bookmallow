@@ -10,7 +10,7 @@ services:
     volumes:
       - ./data:/data
     environment:
-      - TZ=Europe/Paris
+      - TZ=Europe/Paris        # adapte à ton fuseau / adjust to your timezone (app default: UTC)
       - PUID=1000
       - PGID=1000
       - MAX_FILES=6            # nombre de MP3 conservés / MP3s kept

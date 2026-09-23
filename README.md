@@ -37,7 +37,7 @@ Ouvre `http://<ton-serveur>:7843`. Les MP3 arrivent dans `./data`.
 | `MIN_FREE_MB` | `500` | Espace disque à toujours garder libre |
 | `MAX_DURATION_HOURS` | `0` | `0` = aucune limite de durée |
 | `PUID` / `PGID` | `1000` | Propriétaire des fichiers dans `./data` |
-| `TZ` | `UTC` | Fuseau horaire des logs |
+| `TZ` | `UTC` | Fuseau horaire des logs. L'exemple docker-compose.yml met Europe/Paris : adapte-le |
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = met yt-dlp à jour à chaque démarrage |
 | `FORCE_HTTPS` | `0` | `1` derrière un reverse proxy HTTPS (cookie `Secure`) |
 | `SECRET_KEY` | générée | Clé des sessions, persistée dans `/data/.secret` |
@@ -92,7 +92,7 @@ Open `http://<your-server>:7843`. MP3s land in `./data`.
 | `MIN_FREE_MB` | `500` | Disk space to always keep free |
 | `MAX_DURATION_HOURS` | `0` | `0` = no duration limit |
 | `PUID` / `PGID` | `1000` | Owner of the files in `./data` |
-| `TZ` | `UTC` | Log timezone |
+| `TZ` | `UTC` | Log timezone. The example docker-compose.yml sets Europe/Paris: adjust it |
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = upgrade yt-dlp at every start |
 | `FORCE_HTTPS` | `0` | `1` behind an HTTPS reverse proxy (`Secure` cookie) |
 | `SECRET_KEY` | generated | Session key, persisted in `/data/.secret` |
