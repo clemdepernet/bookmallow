@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Callable
 
 from .config import QUALITIES
-from .metadata import classify_error
+from .metadata import classify_error, last_line
 from .retention import PART_SUFFIX
 
 YTDLP_FORMAT = "bestaudio[ext=webm]/bestaudio[acodec^=opus]/bestaudio/best"
@@ -21,10 +21,11 @@ _ESCAPE = re.compile(r"([=;#\\\n])")
 
 
 class ConversionError(Exception):
-    def __init__(self, code: str, detail: str = ""):
+    def __init__(self, code: str, detail: str = "", tail: str = ""):
         super().__init__(detail or code)
         self.code = code
         self.detail = detail
+        self.tail = tail
 
 
 class Cancelled(Exception):
@@ -173,6 +174,7 @@ class Conversion:
         req = self.req
         req.out_path.parent.mkdir(parents=True, exist_ok=True)
         meta_path: Path | None = None
+        yt = ff = None
         try:
             if self._cancelled.is_set():
                 raise Cancelled()
@@ -203,12 +205,13 @@ class Conversion:
             yt_text = yt_err.text()
             if yt_rc != 0 and "ERROR:" in yt_text and "Broken pipe" not in yt_text:
                 code, detail = classify_error(yt_text)
-                raise ConversionError(code, detail or f"yt-dlp exited with {yt_rc}")
+                raise ConversionError(code, detail or f"yt-dlp exited with {yt_rc}", tail=yt_text)
             if ff_rc != 0:
-                raise ConversionError("ffmpeg", ff_err.text() or f"ffmpeg exited with {ff_rc}")
+                tail = ff_err.text()
+                raise ConversionError("ffmpeg", last_line(tail) or f"ffmpeg exited with {ff_rc}", tail=tail)
             if yt_rc != 0:
                 code, detail = classify_error(yt_text)
-                raise ConversionError(code, detail or f"yt-dlp exited with {yt_rc}")
+                raise ConversionError(code, detail or f"yt-dlp exited with {yt_rc}", tail=yt_text)
             os.replace(req.part_path, req.out_path)
         except BaseException:
             _unlink(req.part_path)
@@ -216,3 +219,8 @@ class Conversion:
         finally:
             if meta_path is not None:
                 _unlink(meta_path)
+            if ff is not None:
+                ff.stdout.close()
+                ff.stderr.close()
+            if yt is not None:
+                yt.stderr.close()

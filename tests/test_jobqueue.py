@@ -108,6 +108,23 @@ def test_conversion_error_fails_job(q):
     assert q.get(job.id).error_code == "ffmpeg"
 
 
+def test_conversion_error_tail_is_logged_server_side(q, caplog):
+    """finding #2: a multi-line stderr tail must not end up in job.error, but must reach the logs."""
+    class TailFailingConversion(FakeConversion):
+        def run(self):
+            raise ConversionError("ffmpeg", "line 5", tail="line 1\nline 2\nline 3\nline 4\nline 5")
+
+    q._conversion_factory = TailFailingConversion
+    job = q.submit(URL, "aaaaaaaaaaa", "64")
+    with caplog.at_level("WARNING"):
+        q.process_next(block=False)
+    job = q.get(job.id)
+    assert job.status is Status.FAILED
+    assert job.error == "line 5" and "\n" not in job.error
+    assert any("failed [ffmpeg]" in r.message for r in caplog.records)
+    assert any("line 1\nline 2\nline 3\nline 4\nline 5" in r.message for r in caplog.records)
+
+
 def test_disk_guard(config):
     FakeConversion.instances = []
     config = config.__class__(**{**config.__dict__, "min_free_mb": 100})

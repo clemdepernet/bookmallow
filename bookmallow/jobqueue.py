@@ -168,7 +168,7 @@ class JobQueue:
             self._finish(job, Status.CANCELLED)
             return
         except ConversionError as exc:
-            self._fail(job, exc.code, exc.detail)
+            self._fail(job, exc.code, exc.detail, tail=exc.tail)
             return
         finally:
             with self._lock:
@@ -206,7 +206,10 @@ class JobQueue:
             if job.status is Status.CONVERTING:
                 job.progress = round(percent, 1)
 
-    def _fail(self, job: Job, code: str, detail: str) -> None:
+    def _fail(self, job: Job, code: str, detail: str, tail: str = "") -> None:
+        log.warning("job %s failed [%s]: %s", job.id, code, detail)
+        if tail:
+            log.warning("job %s ffmpeg/yt-dlp stderr tail:\n%s", job.id, tail)
         with self._lock:
             if job.status is Status.CANCELLED:
                 return

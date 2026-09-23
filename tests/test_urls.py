@@ -43,6 +43,19 @@ def test_video_inside_playlist():
 
 
 @pytest.mark.parametrize("raw", [
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1",
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ",
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=ULdQw4w9WgXcQ",
+])
+def test_mix_and_radio_list_ids_are_ignored(raw):
+    """A YouTube mix/radio `list=RD…`/`list=UL…` id is never a fetchable playlist (finding #1)."""
+    p = urls.parse(raw)
+    assert p.video_id == "dQw4w9WgXcQ"
+    assert p.playlist_id is None
+    assert p.is_playlist is False
+
+
+@pytest.mark.parametrize("raw", [
     "", "   ", "https://vimeo.com/12345", "https://example.com/watch?v=dQw4w9WgXcQ",
     "https://www.youtube.com/", "https://www.youtube.com/watch?v=short",
     "https://evil.com/?u=youtube.com/watch?v=dQw4w9WgXcQ", "https://youtube.com.evil.com/watch?v=dQw4w9WgXcQ",

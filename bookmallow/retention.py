@@ -49,8 +49,9 @@ def next_to_go(directory: Path, max_files: int) -> str | None:
 
 
 def remove_partials(directory: Path) -> list[Path]:
+    """Remove `.part.mp3` files and their sibling metadata (e.g. `.part.ffmeta`) left by a crash."""
     removed: list[Path] = []
-    for path in Path(directory).glob(f"*{PART_SUFFIX}"):
+    for path in Path(directory).glob("*.part.*"):
         path.unlink(missing_ok=True)
         removed.append(path)
     return removed

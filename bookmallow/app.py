@@ -49,7 +49,10 @@ def build_state(config: Config, q: JobQueue) -> dict:
             job["expired"] = False
     files_out = []
     for path in files:
-        st = path.stat()
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            continue
         job = by_name.get(path.name)
         files_out.append({
             "name": path.name,
@@ -99,25 +102,32 @@ def _submit(config: Config, q: JobQueue, fetch_playlist):
         return jsonify(error="invalid_url", detail=str(exc)), 400
 
     mode = data.get("playlist")
+    playlist_error: str | None = None
     if parsed.is_playlist and mode != "ignore":
         try:
-            playlist = fetch_playlist(parsed.playlist_url)
+            playlist = fetch_playlist(parsed.playlist_url, limit=PLAYLIST_PREVIEW_LIMIT)
         except md.MetadataError as exc:
-            return jsonify(error="metadata", code=exc.code, detail=exc.detail), 502
-        if mode != "expand":
-            return jsonify(playlist={
-                "id": playlist.playlist_id,
-                "title": playlist.title,
-                "count": len(playlist.entries),
-                "entries": [{"video_id": e.video_id, "title": e.title, "duration": e.duration}
-                            for e in playlist.entries[:PLAYLIST_PREVIEW_LIMIT]],
-                "max_files": config.max_files,
-                "single_video_url": parsed.watch_url if parsed.video_id else None,
-            })
-        wanted = data.get("video_ids")
-        wanted_set = set(map(str, wanted)) if isinstance(wanted, list) and wanted else None
-        entries = [e for e in playlist.entries if wanted_set is None or e.video_id in wanted_set]
-        targets = [(urls.watch_url(e.video_id), e.video_id) for e in entries[:config.max_files]]
+            if parsed.video_id is None:
+                return jsonify(error="metadata", code=exc.code, detail=exc.detail), 502
+            log.warning("playlist %s unreadable [%s], falling back to single video %s",
+                        parsed.playlist_id, exc.code, parsed.video_id)
+            playlist_error = exc.code
+            targets = [(parsed.watch_url, parsed.video_id)]
+        else:
+            if mode != "expand":
+                return jsonify(playlist={
+                    "id": playlist.playlist_id,
+                    "title": playlist.title,
+                    "count": len(playlist.entries),
+                    "entries": [{"video_id": e.video_id, "title": e.title, "duration": e.duration}
+                                for e in playlist.entries[:PLAYLIST_PREVIEW_LIMIT]],
+                    "max_files": config.max_files,
+                    "single_video_url": parsed.watch_url if parsed.video_id else None,
+                })
+            wanted = data.get("video_ids")
+            wanted_set = set(map(str, wanted)) if isinstance(wanted, list) and wanted else None
+            entries = [e for e in playlist.entries if wanted_set is None or e.video_id in wanted_set]
+            targets = [(urls.watch_url(e.video_id), e.video_id) for e in entries[:config.max_files]]
     else:
         if parsed.video_id is None:
             return jsonify(error="invalid_url", detail="no_id"), 400
@@ -131,7 +141,10 @@ def _submit(config: Config, q: JobQueue, fetch_playlist):
             skipped.append(exc.job.to_dict())
     if not created and skipped:
         return jsonify(error="duplicate", jobs=skipped), 409
-    return jsonify(jobs=created, skipped=skipped), 201
+    payload = {"jobs": created, "skipped": skipped}
+    if playlist_error is not None:
+        payload["playlist_error"] = playlist_error
+    return jsonify(**payload), 201
 
 
 def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, start_worker: bool = True,
@@ -154,6 +167,16 @@ def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, s
     if start_worker:
         q.start()
     app.extensions["jobqueue"] = q
+
+    @app.after_request
+    def _security_headers(response):
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data: https://i.ytimg.com https://*.ggpht.com; "
+            "frame-ancestors 'none'"
+        )
+        return response
 
     @app.get("/healthz")
     def healthz():

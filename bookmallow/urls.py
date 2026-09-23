@@ -75,7 +75,7 @@ def parse(raw: str) -> ParsedUrl:
                 video_id = m.group(1)
 
     lst = query.get("list", [""])[0]
-    if lst and _PLAYLIST_ID.match(lst):
+    if lst and not lst.startswith(("RD", "UL")) and _PLAYLIST_ID.match(lst):
         playlist_id = lst
 
     if video_id is None and playlist_id is None:
