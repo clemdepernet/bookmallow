@@ -67,7 +67,7 @@ largement pour quelques utilisatrices.
 | `metadata.py` | `yt-dlp -J` → titre, durée, miniature, chaîne, chapitres, liste des vidéos d'une playlist | `urls` |
 | `converter.py` | Lance le pipeline yt-dlp → ffmpeg, parse la progression ffmpeg, permet l'annulation | `config` |
 | `jobs.py` | Modèle `Job` (dataclass), états, sérialisation | — |
-| `queue.py` | `JobQueue` : file FIFO, worker unique, transitions d'état, callbacks | `jobs`, `converter`, `metadata`, `retention`, `state` |
+| `jobqueue.py` | `JobQueue` : file FIFO, worker unique, transitions d'état, callbacks | `jobs`, `converter`, `metadata`, `retention`, `state` |
 | `retention.py` | `prune(directory, max_files)` renvoie les fichiers supprimés ; `next_to_go()` | — |
 | `state.py` | Charge/sauvegarde `state.json` de façon atomique (écriture tmp + rename) | `jobs` |
 | `names.py` | Nom de fichier sûr à partir d'un titre (`Title [videoId].mp3`), troncature, dédoublonnage | — |
@@ -294,7 +294,7 @@ en CI.
 - `test_state.py` : écriture atomique, rechargement, fichier corrompu.
 - `test_converter.py` : construction des commandes selon la qualité, parseur `out_time_us`,
   annulation, échec sur code de retour (processus simulés par un `runner` injecté).
-- `test_queue.py` : ordre FIFO, un seul job actif, transitions d'état, 409 sur doublon, reprise
+- `test_jobqueue.py` : ordre FIFO, un seul job actif, transitions d'état, 409 sur doublon, reprise
   au démarrage.
 - `test_app.py` : routes avec le client de test Flask, auth activée/désactivée, téléchargement
   sécurisé (nom inexistant → 404, traversée impossible).
