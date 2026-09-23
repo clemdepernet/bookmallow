@@ -26,7 +26,9 @@ def test_index_has_hooks_and_static_assets(config):
     assert 'action="/logout"' not in html  # auth disabled → no logout button
     for asset in ("/static/style.css", "/static/app.js", "/static/logo.svg"):
         assert asset in html
-        assert c.get(asset).status_code == 200
+        r = c.get(asset)
+        assert r.status_code == 200
+        r.close()
 
 
 def test_no_external_resources():
