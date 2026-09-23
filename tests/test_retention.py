@@ -53,6 +53,16 @@ def test_remove_partials(tmp_path):
     assert [p.name for p in tmp_path.iterdir()] == ["keep.mp3"]
 
 
+def test_remove_partials_also_cleans_stray_ffmeta(tmp_path):
+    """A crash mid-conversion can leave `<name>.part.ffmeta` next to (or instead of) `.part.mp3` (finding #12)."""
+    make(tmp_path, "keep.mp3", 0)
+    make(tmp_path, "wip.part.mp3", 0)
+    make(tmp_path, "wip.part.ffmeta", 0)
+    removed = retention.remove_partials(tmp_path)
+    assert sorted(p.name for p in removed) == ["wip.part.ffmeta", "wip.part.mp3"]
+    assert [p.name for p in tmp_path.iterdir()] == ["keep.mp3"]
+
+
 def test_list_mp3_skips_files_that_vanish_during_listing(tmp_path, monkeypatch):
     make(tmp_path, "keep.mp3", 10)
     ghost = make(tmp_path, "ghost.mp3", 0)

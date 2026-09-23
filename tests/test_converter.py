@@ -130,6 +130,18 @@ def test_run_ffmpeg_failure(tmp_path):
     assert not r.part_path.exists() and not r.out_path.exists()
 
 
+def test_run_ffmpeg_failure_detail_is_one_line_but_tail_keeps_everything(tmp_path):
+    """job.error must stay a short readable line; the full stderr tail is carried separately (finding #2)."""
+    stderr = b"\n".join(f"line {i}".encode() for i in range(1, 6)) + b"\n"
+    popen, _ = fake_popen(ff_rc=1, ff_stderr=stderr)
+    with pytest.raises(cv.ConversionError) as exc:
+        cv.Conversion(req(tmp_path), popen=popen).run()
+    assert exc.value.code == "ffmpeg"
+    assert exc.value.detail == "line 5"
+    assert "\n" not in exc.value.detail
+    assert exc.value.tail == "line 1\nline 2\nline 3\nline 4\nline 5"
+
+
 def test_run_ytdlp_error_wins_over_ffmpeg_noise(tmp_path):
     popen, _ = fake_popen(ff_rc=1, ff_stderr=b"pipe:0: Invalid data\n", yt_rc=1,
                           yt_stderr=b"ERROR: [youtube] dQw4w9WgXcQ: Private video\n")
@@ -144,6 +156,23 @@ def test_run_broken_pipe_from_ytdlp_is_reported_as_ffmpeg(tmp_path):
     with pytest.raises(cv.ConversionError) as exc:
         cv.Conversion(req(tmp_path), popen=popen).run()
     assert exc.value.code == "ffmpeg"
+
+
+def test_run_closes_all_pipes_on_success(tmp_path):
+    """No ResourceWarning: ff.stdout/stderr and yt.stderr must be closed once run() returns (finding #7)."""
+    procs = {}
+
+    def popen(cmd, **kw):
+        if cmd[0] == "yt-dlp":
+            procs["yt"] = FakeProc(cmd, rc=0)
+            return procs["yt"]
+        Path(cmd[-1]).write_bytes(b"ID3fake")
+        procs["ff"] = FakeProc(cmd, stdout_bytes=b"out_time_us=1000\n", rc=0)
+        return procs["ff"]
+
+    cv.Conversion(req(tmp_path), popen=popen).run()
+    assert procs["ff"].stdout.closed and procs["ff"].stderr.closed
+    assert procs["yt"].stderr.closed
 
 
 def test_cancel_before_run_raises_cancelled(tmp_path):

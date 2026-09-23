@@ -12,8 +12,10 @@ _COMMON = ["--no-warnings", "--no-progress", "--dump-single-json"]
 _ERROR_PATTERNS: list[tuple[str, tuple[str, ...]]] = [
     ("private", ("private video",)),
     ("age", ("confirm your age", "age-restricted", "age restricted", "inappropriate for some users")),
+    ("bot", ("not a bot", "sign in to confirm you")),
     ("geo", ("available in your country", "geo restricted", "geo-restricted", "blocked it in your country")),
-    ("unavailable", ("video unavailable", "has been removed", "no longer available", "does not exist", "not available")),
+    ("unavailable", ("video unavailable", "is unavailable", "has been removed", "no longer available",
+                      "does not exist", "video is not available")),
     ("live", ("live event", "premieres in", "is a live stream", "live stream")),
 ]
 
@@ -111,8 +113,8 @@ def fetch_video(url: str, runner: Runner = default_runner, timeout: float = 60.0
     )
 
 
-def fetch_playlist(url: str, runner: Runner = default_runner, timeout: float = 90.0) -> PlaylistMeta:
-    info = _parse(runner([*_COMMON, "--flat-playlist", url], timeout))
+def fetch_playlist(url: str, runner: Runner = default_runner, timeout: float = 90.0, limit: int = 200) -> PlaylistMeta:
+    info = _parse(runner([*_COMMON, "--flat-playlist", "--playlist-items", f":{limit}", url], timeout))
     entries = [
         PlaylistEntry(video_id=str(e["id"]), title=str(e.get("title") or "Sans titre"), duration=_int_or_none(e.get("duration")))
         for e in (info.get("entries") or []) if isinstance(e, dict) and e.get("id")

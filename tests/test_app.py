@@ -13,7 +13,7 @@ from bookmallow.state import StateStore
 WATCH = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
-def fake_playlist(url):
+def fake_playlist(url, **kwargs):
     return PlaylistMeta("PL1", "Ma liste", [PlaylistEntry(c * 11, f"Partie {c}", 10) for c in "abcdefgh"])
 
 
@@ -44,6 +44,16 @@ def test_healthz(client):
 def test_index_renders(client):
     r = client.get("/")
     assert r.status_code == 200 and b"Bookmallow" in r.data
+
+
+def test_security_headers_present(client):
+    r = client.get("/")
+    assert r.headers["X-Frame-Options"] == "DENY"
+    assert r.headers["X-Content-Type-Options"] == "nosniff"
+    csp = r.headers["Content-Security-Policy"]
+    assert "default-src 'self'" in csp
+    assert "img-src 'self' data: https://i.ytimg.com https://*.ggpht.com" in csp
+    assert "frame-ancestors 'none'" in csp
 
 
 def test_state_shape(client, config):
@@ -132,11 +142,47 @@ def test_playlist_expand_selected_ids(client):
 
 
 def test_playlist_error(config):
-    def boom(url):
+    def boom(url, **kwargs):
         raise MetadataError("unavailable", "gone")
     c = make_client(config, fetch_playlist=boom)
     r = c.post("/api/jobs", json={"url": "https://www.youtube.com/playlist?list=PL1"})
     assert r.status_code == 502 and r.get_json() == {"error": "metadata", "code": "unavailable", "detail": "gone"}
+
+
+def test_mix_list_id_is_not_a_playlist(config):
+    """A `list=RD…` mix/radio id must not trigger a playlist lookup at all (finding #1)."""
+    calls = []
+
+    def tracking_fetch(url, **kwargs):
+        calls.append(url)
+        raise AssertionError("fetch_playlist must not be called for a mix/radio list id")
+
+    c = make_client(config, fetch_playlist=tracking_fetch)
+    r = c.post("/api/jobs", json={"url": WATCH + "&list=RDdQw4w9WgXcQ&start_radio=1"})
+    assert r.status_code == 201
+    assert r.get_json()["jobs"][0]["video_id"] == "dQw4w9WgXcQ"
+    assert "playlist_error" not in r.get_json()
+    assert calls == []
+
+
+def test_playlist_error_falls_back_to_single_video_when_video_id_present(config):
+    def boom(url, **kwargs):
+        raise MetadataError("unavailable", "This playlist type is unviewable")
+    c = make_client(config, fetch_playlist=boom)
+    r = c.post("/api/jobs", json={"url": WATCH + "&list=PL1"})
+    assert r.status_code == 201
+    body = r.get_json()
+    assert body["jobs"][0]["video_id"] == "dQw4w9WgXcQ"
+    assert body["playlist_error"] == "unavailable"
+
+
+def test_playlist_only_error_stays_502(config):
+    """No video id in the URL: there is no single-video fallback, so the 502 stands."""
+    def boom(url, **kwargs):
+        raise MetadataError("unavailable", "gone")
+    c = make_client(config, fetch_playlist=boom)
+    r = c.post("/api/jobs", json={"url": "https://www.youtube.com/playlist?list=PL1"})
+    assert r.status_code == 502
 
 
 def test_cancel_job(client):
@@ -151,8 +197,10 @@ def test_download_file(client, config):
     r = client.get("/api/files/Livre%20%5BdQw4w9WgXcQ%5D.mp3")
     assert r.status_code == 200 and r.data == b"0123456789"
     assert "attachment" in r.headers["Content-Disposition"]
+    r.close()
     r = client.get("/api/files/Livre%20%5BdQw4w9WgXcQ%5D.mp3", headers={"Range": "bytes=0-3"})
     assert r.status_code == 206 and r.data == b"0123"
+    r.close()
 
 
 def test_download_refuses_missing_traversal_and_non_mp3(client, config):
@@ -204,6 +252,18 @@ def test_auth_login_flow(auth_client):
     assert auth_client.get("/api/state").status_code == 401
 
 
+def test_unauthenticated_get_download_redirects_to_login(auth_client):
+    """A GET on a download link from an expired session should send a browser to /login, not raw JSON (finding #11)."""
+    r = auth_client.get("/api/files/Livre%20%5BdQw4w9WgXcQ%5D.mp3")
+    assert r.status_code == 302
+    location = r.headers["Location"]
+    assert location.startswith("/login?next=")
+    assert "/api/files/Livre" in location
+    # Every other unauthenticated /api/ call keeps returning JSON.
+    assert auth_client.delete("/api/files/Livre%20%5BdQw4w9WgXcQ%5D.mp3").status_code == 401
+    assert auth_client.get("/api/state").status_code == 401
+
+
 def test_auth_open_redirect_blocked(auth_client):
     r = auth_client.post("/login?next=//evil.com/x", data={"password": "pink"})
     assert r.headers["Location"] in ("/", "http://localhost/")
@@ -214,3 +274,34 @@ def test_auth_open_redirect_blocked(auth_client):
 def test_build_state_direct(config, client):
     d = build_state(config, client.queue)
     assert set(d) == {"jobs", "files", "retention", "config"}
+
+
+def test_build_state_survives_file_vanishing_between_list_and_stat(client, config, monkeypatch):
+    """/api/state must not 500 when retention/another request deletes a listed file mid-request (finding #3)."""
+    (config.data_dir / "keep.mp3").write_bytes(b"x" * 5)
+    (config.data_dir / "ghost.mp3").write_bytes(b"y" * 5)
+    from pathlib import Path as PathCls
+    real_stat = PathCls.stat
+
+    def flaky_stat(self, *a, **kw):
+        if self.name == "ghost.mp3":
+            raise FileNotFoundError(self)
+        return real_stat(self, *a, **kw)
+
+    monkeypatch.setattr(PathCls, "stat", flaky_stat)
+    r = client.get("/api/state")
+    assert r.status_code == 200
+    names = {f["name"] for f in r.get_json()["files"]}
+    assert names == {"keep.mp3"}
+
+
+def test_playlist_preview_passes_limit_to_yt_dlp(config):
+    calls = []
+
+    def spy(url, runner=None, timeout=90.0, limit=200):
+        calls.append(limit)
+        return PlaylistMeta("PL1", "Ma liste", [])
+
+    c = make_client(config, fetch_playlist=spy)
+    c.post("/api/jobs", json={"url": "https://www.youtube.com/playlist?list=PL1"})
+    assert calls == [200]

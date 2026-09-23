@@ -73,11 +73,21 @@ def test_fetch_playlist():
     assert "--flat-playlist" in runner.calls[0][0]
 
 
+def test_fetch_playlist_bounds_the_preview_with_playlist_items(monkeypatch):
+    runner = runner_returning({"id": "PLxyz", "title": "Ma liste", "entries": []})
+    md.fetch_playlist("https://www.youtube.com/playlist?list=PLxyz", runner=runner, limit=200)
+    args = runner.calls[0][0]
+    assert "--playlist-items" in args
+    assert args[args.index("--playlist-items") + 1] == ":200"
+
+
 @pytest.mark.parametrize("stderr,code", [
     ("ERROR: [youtube] abc: Private video. Sign in if you've been granted access", "private"),
     ("ERROR: [youtube] abc: Sign in to confirm your age", "age"),
     ("ERROR: The uploader has not made this video available in your country", "geo"),
     ("ERROR: [youtube] abc: Video unavailable", "unavailable"),
+    ("ERROR: [youtube] X: This video is unavailable", "unavailable"),
+    ("ERROR: [youtube] X: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies", "bot"),
     ("WARNING: something\nERROR: This live event will begin in 3 hours", "live"),
     ("ERROR: something new and weird", "ytdlp"),
 ])
@@ -111,3 +121,18 @@ def test_default_runner_maps_nonzero_exit(monkeypatch):
     with pytest.raises(md.MetadataError) as exc:
         md.default_runner(["x"], 5)
     assert exc.value.code == "private"
+
+
+def test_fetch_video_raises_metadata_error_on_null_json(monkeypatch):
+    """yt-dlp exiting 0 while printing `null` (seen in the wild) must not crash fetch_video (finding #6)."""
+    import subprocess
+
+    class Proc:
+        returncode = 0
+        stdout = "null\n"
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: Proc())
+    with pytest.raises(md.MetadataError) as exc:
+        md.fetch_video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    assert exc.value.code == "metadata"

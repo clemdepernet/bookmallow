@@ -25,6 +25,11 @@ def login_required(view):
         config: Config = current_app.config["BOOKMALLOW"]
         if is_authenticated(config):
             return view(*args, **kwargs)
+        # A GET on a download link is usually followed straight from a browser tab or an <a>
+        # click, not from the app's own fetch() calls: send the person to a real login page
+        # instead of a raw JSON error they cannot act on.
+        if request.method == "GET" and request.path.startswith("/api/files/"):
+            return redirect(url_for("login", next=request.path))
         if request.path.startswith("/api/"):
             return jsonify(error="unauthorized"), 401
         return redirect(url_for("login", next=request.path))
