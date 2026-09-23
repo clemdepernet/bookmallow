@@ -6,3 +6,4 @@ docs
 .pytest_cache
 **/__pycache__
 *.md
+.superpowers/

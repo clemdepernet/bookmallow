@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim AS base
 ARG TARGETARCH
+ARG DENO_VERSION=2.9.7
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -15,7 +16,7 @@ RUN set -eux; \
       arm64) DENO_ARCH=aarch64 ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL -o /tmp/deno.zip "https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-unknown-linux-gnu.zip"; \
+    curl -fsSL -o /tmp/deno.zip "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${DENO_ARCH}-unknown-linux-gnu.zip"; \
     unzip -q /tmp/deno.zip -d /usr/local/bin; \
     rm /tmp/deno.zip; \
     chmod +x /usr/local/bin/deno; \
