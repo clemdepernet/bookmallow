@@ -162,6 +162,50 @@ def test_cancel_during_conversion(q):
     assert FakeConversion.instances == []
 
 
+def test_cancel_while_converting_calls_conversion_cancel(q):
+    import threading
+    started, release = threading.Event(), threading.Event()
+
+    class BlockingConversion(FakeConversion):
+        def run(self):
+            started.set()
+            release.wait(timeout=5)
+            if self.cancelled:
+                raise Cancelled()
+            self.req.out_path.write_bytes(b"x")
+
+    q._conversion_factory = BlockingConversion
+    job = q.submit(URL, "aaaaaaaaaaa", "64")
+    worker = threading.Thread(target=q.process_next, kwargs={"block": False}, daemon=True)
+    worker.start()
+    assert started.wait(timeout=5)
+    assert q.cancel(job.id) is True
+    release.set()
+    worker.join(timeout=5)
+    assert not worker.is_alive()
+    assert q.get(job.id).status is Status.CANCELLED
+    assert BlockingConversion.instances[-1].cancelled is True
+    assert not list(q.config.data_dir.glob("*.mp3"))
+
+
+def test_cancel_landing_after_successful_run_still_wins(q):
+    """cancel() in the window between conv.run() returning and the success block must not be overwritten by DONE."""
+    import threading
+
+    class RacingConversion(FakeConversion):
+        def run(self):
+            self.req.out_path.write_bytes(b"x" * 10)
+            # simulate the race: cancel arrives right as run() returns, before the success block runs
+            q.cancel(self.job_id)
+
+    job = q.submit(URL, "aaaaaaaaaaa", "64")
+    RacingConversion.job_id = job.id
+    q._conversion_factory = RacingConversion
+    q.process_next(block=False)
+    assert q.get(job.id).status is Status.CANCELLED
+    assert not list(q.config.data_dir.glob("*.mp3"))
+
+
 def test_retention_runs_after_each_job(config):
     config = config.__class__(**{**config.__dict__, "max_files": 2})
     queue = jq.JobQueue(config, StateStore(config.state_path), fetch_video=meta_for, conversion_factory=FakeConversion,

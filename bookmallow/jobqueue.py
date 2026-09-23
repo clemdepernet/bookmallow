@@ -175,6 +175,10 @@ class JobQueue:
                 self._current, self._current_id = None, None
 
         with self._lock:
+            if job.status is Status.CANCELLED:
+                out_path.unlink(missing_ok=True)
+                self._save()
+                return
             job.filename = out_path.name
             job.size_bytes = out_path.stat().st_size if out_path.exists() else None
             job.progress = 100.0
