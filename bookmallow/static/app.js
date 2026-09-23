@@ -38,6 +38,7 @@
       err_duplicate: "Cette vidéo est déjà dans la file.",
       err_network: "Impossible de joindre le serveur.",
       err_playlist: "Impossible de lire cette playlist.",
+      playlist_fallback: "Playlist illisible : seule cette vidéo a été ajoutée",
       added_one: "Ajouté à la file 🎀",
       added_many: "{n} vidéos ajoutées à la file 🎀",
       skipped: "{n} déjà en file",
@@ -59,8 +60,11 @@
       e_ytdlp: "Erreur yt-dlp",
       e_ffmpeg: "Erreur de conversion",
       e_internal: "Erreur interne",
+      e_bot: "YouTube demande une vérification anti-robot depuis ce serveur",
       hours: "h", minutes: "min",
       lang_switch: "English",
+      status_line_idle: "Aucune conversion en cours",
+      status_line_active: "{n} conversion(s) en cours, {pct} %",
     },
     en: {
       tagline: "Your YouTube videos as audiobooks",
@@ -97,6 +101,7 @@
       err_duplicate: "This video is already queued.",
       err_network: "Cannot reach the server.",
       err_playlist: "Could not read this playlist.",
+      playlist_fallback: "Playlist unreadable: only this video was added",
       added_one: "Added to the queue 🎀",
       added_many: "{n} videos added to the queue 🎀",
       skipped: "{n} already queued",
@@ -118,8 +123,11 @@
       e_ytdlp: "yt-dlp error",
       e_ffmpeg: "Conversion error",
       e_internal: "Internal error",
+      e_bot: "YouTube is asking this server for a bot check",
       hours: "h", minutes: "min",
       lang_switch: "Français",
+      status_line_idle: "No conversion running",
+      status_line_active: "{n} conversion(s) running, {pct} %",
     },
   };
 
@@ -158,7 +166,8 @@
 
   const fmtDuration = (s) => {
     if (!s && s !== 0) return "";
-    const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+    const totalMinutes = Math.round(s / 60);
+    const h = Math.floor(totalMinutes / 60), m = totalMinutes % 60;
     return h ? `${h} ${t("hours")} ${String(m).padStart(2, "0")}` : `${m} ${t("minutes")}`;
   };
   const fmtSize = (b) => {
@@ -288,15 +297,19 @@
     const jobsList = $("#jobs");
     jobsList.replaceChildren(...visibleJobs.map(jobCard));
     $("#jobs-empty").classList.toggle("hidden", visibleJobs.length > 0);
-    const active = data.jobs.filter((j) => ["queued", "fetching", "converting"].includes(j.status)).length;
-    $("#queue-count").textContent = active ? String(active) : "";
+    const activeJobs = data.jobs.filter((j) => ["queued", "fetching", "converting"].includes(j.status));
+    $("#queue-count").textContent = activeJobs.length ? String(activeJobs.length) : "";
+    const converting = activeJobs.find((j) => j.status === "converting");
+    $("#queue-status").textContent = activeJobs.length
+      ? t("status_line_active", { n: activeJobs.length, pct: converting ? Math.round(converting.progress) : 0 })
+      : t("status_line_idle");
 
     const filesList = $("#files");
     filesList.replaceChildren(...data.files.map((f) => fileCard(f, data.retention.next_to_go)));
     $("#files-empty").classList.toggle("hidden", data.files.length > 0);
     $("#files-count").textContent = data.files.length ? `${data.files.length}/${maxFiles}` : "";
 
-    schedule(active > 0 ? 2000 : 10000);
+    schedule(activeJobs.length > 0 ? 2000 : 10000);
   }
 
   function schedule(ms) {
@@ -327,6 +340,7 @@
         const n = payload.jobs.length;
         toast(n === 1 ? t("added_one") : t("added_many", { n }), "ok");
         if (payload.skipped && payload.skipped.length) setMsg(t("skipped", { n: payload.skipped.length }));
+        if (payload.playlist_error) toast(t("playlist_fallback"), "error");
         $("#url").value = "";
         closePlaylist();
         refresh();

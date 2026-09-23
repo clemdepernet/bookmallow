@@ -10,7 +10,7 @@
   --lilac-soft: #EFE9FB;
   --mint-soft: #E6F7EE;
   --coral-soft: #FDE8E4;
-  --muted: #8A6F7D;
+  --muted: #7A5F6D;
   --card: #FFFFFF;
   --border: #F3DCE5;
   --radius: 22px;
@@ -120,7 +120,7 @@ input[type="url"]:focus, input[type="password"]:focus { border-color: var(--pink
 .pill.fetching, .pill.converting { background: var(--pink-soft); color: var(--pink-strong); }
 .pill.done { background: var(--mint-soft); color: #23795A; }
 .pill.failed { background: var(--coral-soft); color: #B3362B; }
-.pill.cancelled { background: #EEE; color: var(--muted); }
+.pill.cancelled { background: #EEE; color: #5E4A54; }
 .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .pill.converting .dot, .pill.fetching .dot { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
