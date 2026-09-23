@@ -51,3 +51,18 @@ def test_remove_partials(tmp_path):
     removed = retention.remove_partials(tmp_path)
     assert sorted(p.name for p in removed) == ["x.part.mp3", "y.part.mp3"]
     assert [p.name for p in tmp_path.iterdir()] == ["keep.mp3"]
+
+
+def test_list_mp3_skips_files_that_vanish_during_listing(tmp_path, monkeypatch):
+    make(tmp_path, "keep.mp3", 10)
+    ghost = make(tmp_path, "ghost.mp3", 0)
+    real_stat = retention.Path.stat
+
+    def flaky_stat(self, *args, **kwargs):
+        if self.name == "ghost.mp3":
+            raise FileNotFoundError(self)
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(retention.Path, "stat", flaky_stat)
+    assert [p.name for p in retention.list_mp3(tmp_path)] == ["keep.mp3"]
+    assert retention.next_to_go(tmp_path, 1) == "keep.mp3"
