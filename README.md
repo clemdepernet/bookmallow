@@ -1,168 +1,122 @@
-# YouTube to MP3 Downloader Docker Container
+<p align="center"><img src="bookmallow/static/logo.svg" width="96" alt=""></p>
+<h1 align="center">Bookmallow</h1>
+<p align="center">Tes vidéos YouTube en audiobooks MP3, en douceur. · Your YouTube videos as audiobook MP3s, gently.</p>
+<p align="center"><img src="docs/screenshot.png" width="720" alt="Bookmallow screenshot"></p>
 
-![YouTube to MP3 Downloader](youtube-downloader-screenshot.png)
+---
 
-A web-based YouTube to MP3 downloader that runs in a Docker container, perfect for hosting on your Synology NAS.
+## 🇫🇷 Français
 
-## Features
+Bookmallow est un petit conteneur auto-hébergé : tu colles un lien YouTube, il te rend un MP3 « audiobook », depuis une interface pastel accessible depuis ton téléphone. Il est conçu pour un Raspberry Pi et pour les vidéos **très** longues (10 h, 17 h…) : l'audio est converti **en streaming**, sans jamais stocker la vidéo ni l'audio brut sur le disque.
 
-- 🎵 Download YouTube videos as high-quality MP3 files
-- 📋 **Playlist support** - Download individual videos or entire playlists
-- 🔍 **Smart detection** - Automatically detects playlists and asks for confirmation
-- 🌐 Clean web interface accessible from any device
-- 📱 Mobile-friendly responsive design
-- 📊 Real-time download progress with playlist tracking
-- 📂 Browse and download previous files
-- 🔄 Background downloading with status updates
+### Pourquoi
 
-## Deployment Options
+- **Zéro fichier intermédiaire** : `yt-dlp` envoie l'audio directement à `ffmpeg`. Une vidéo de 10 h pèse ~290 Mo en 64 kbps mono, au lieu de 1,5 Go de pic avec un téléchargement classique.
+- **File d'attente** : une conversion à la fois, progression en direct, annulation, reprise après redémarrage.
+- **Rétention** : Bookmallow ne garde que les `MAX_FILES` derniers fichiers (6 par défaut). L'interface le rappelle et marque le prochain fichier qui disparaîtra.
+- **Pour partager** : mot de passe optionnel, interface FR/EN, aucune ressource externe.
 
-### Method 1: Docker Compose (Recommended)
-
-```bash
-
-# Clone or upload the project files
-git clone https://github.com/TheFatPanda-Dev/youtube-to-mp3-docker.git
-cd youtube-downloader
-
-# Start the container
-docker compose up -d --build
-```
-
-### Method 2: Portainer Stack Deployment
-
-1. **In Portainer:**
-   - Go to **Stacks** → **Add Stack**
-   - Name: `youtube-downloader`
-   - Paste the following stack configuration:
-
-```yaml
-services:
-  youtube-downloader:
-    build: .
-    ports:
-      - "7843:5000"
-    volumes:
-      - /path/to/your/downloads:/app/downloads
-    environment:
-      - FLASK_ENV=production
-    restart: unless-stopped
-```
-
-2. **Configure volume mapping:**
-   - Replace `/path/to/your/downloads` with your desired download directory
-   - Examples:
-     - Synology: `/volume1/docker/downloads/youtube`
-     - Linux: `/home/user/downloads/youtube`
-     - Windows: `C:\Downloads\YouTube`
-
-### Method 3: Synology Docker GUI
-
-1. **Build the image first via SSH:**
-
-   ```bash
-   cd /path/to/youtube-downloader/
-   sudo docker build -t youtube-downloader .
-   ```
-
-2. **In Synology Docker GUI:**
-   - Go to **Image** → **Add** → **From Image** → `youtube-downloader`
-   - Configure container:
-     - **Container Name:** `youtube-downloader`
-     - **Port:** Local `7843` → Container `5000`
-     - **Volume:** Map `/path/to/your/downloads` → `/app/downloads`
-     - **Environment:** `FLASK_ENV=production`
-
-## Usage
-
-1. Open your browser → http://localhost:7843/
-2. Paste a YouTube URL (video or playlist)
-3. If it's a playlist, choose to download single video or entire playlist
-4. Click "Download as MP3"
-5. Monitor progress in real-time
-6. Download completed files from the "Recent Downloads" section
-
-## File Structure
-
-```
-youtube-downloader/
-├── Dockerfile              # Container definition
-├── docker-compose.yml      # Compose configuration
-├── app.py                  # Flask web application
-├── templates/
-│   └── index.html         # Web interface
-├── static/                # Static files (empty for now)
-├── downloads/             # Downloaded files (created automatically)
-└── README.md             # This file
-```
-
-## Configuration
-
-### Environment Variables
-
-- `FLASK_ENV`: Set to `production` for production use
-- `FLASK_APP`: Application entry point (defaults to `app.py`)
-
-### Volumes
-
-- `/app/downloads`: Where downloaded files are stored inside the container
-- Map this to your desired download directory on the host system:
-  - **Synology NAS:** `/volume1/docker/downloads/youtube`
-  - **Linux:** `/home/user/downloads/youtube`
-  - **Windows:** `C:\Downloads\YouTube`
-  - **macOS:** `/Users/username/Downloads/YouTube`
-
-### Ports
-
-- `7843`: Web interface port
-- You can change the external port in `docker-compose.yml`
-
-## Security Notes
-
-- This container runs on your local network
-- Consider using a reverse proxy with authentication for external access
-- The container runs as root for ffmpeg compatibility
-- Downloaded files are stored in the mapped volume
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Container won't start:**
-   - Check logs: `sudo docker logs youtube-downloader`
-   - Ensure port 7843 is not in use
-
-2. **Downloads fail:**
-   - YouTube may have changed their API
-   - Check container logs for yt-dlp errors
-   - Try updating the container
-
-3. **Permission issues:**
-   - Ensure the downloads directory is writable
-   - Check folder permissions on your host system
-   - On Linux/Synology: `chmod 755 /path/to/downloads`
-
-### Updating
-
-To update to the latest version:
-
-**Docker Compose:**
+### Démarrer en 3 commandes
 
 ```bash
-cd /path/to/youtube-downloader/
-docker compose down
-docker compose up -d --build
+mkdir bookmallow && cd bookmallow
+curl -fsSLO https://raw.githubusercontent.com/clemdepernet/bookmallow/main/docker-compose.yml
+docker compose up -d
 ```
 
-**Portainer:**
+Ouvre `http://<ton-serveur>:7843`. Les MP3 arrivent dans `./data`.
 
-- Go to your stack and click **Editor**
-- Click **Update the stack** to rebuild with latest code
+### Configuration
 
-## Technical Details
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `MAX_FILES` | `6` | Nombre de MP3 conservés ; les plus anciens sont supprimés |
+| `DEFAULT_QUALITY` | `64` | `64` (voix, mono, ~29 Mo/h), `128` (~58 Mo/h) ou `192` (~86 Mo/h) |
+| `APP_PASSWORD` | vide | Mot de passe partagé ; vide = pas de connexion |
+| `DEFAULT_LANG` | `fr` | `fr` ou `en` (chaque personne peut basculer) |
+| `MIN_FREE_MB` | `500` | Espace disque à toujours garder libre |
+| `MAX_DURATION_HOURS` | `0` | `0` = aucune limite de durée |
+| `PUID` / `PGID` | `1000` | Propriétaire des fichiers dans `./data` |
+| `TZ` | `UTC` | Fuseau horaire des logs |
+| `YTDLP_AUTO_UPDATE` | `0` | `1` = met yt-dlp à jour à chaque démarrage |
+| `FORCE_HTTPS` | `0` | `1` derrière un reverse proxy HTTPS (cookie `Secure`) |
+| `SECRET_KEY` | générée | Clé des sessions, persistée dans `/data/.secret` |
 
-- **Base Image:** Python 3.11 slim
-- **Dependencies:** yt-dlp, Flask, ffmpeg
-- **Download Engine:** yt-dlp (more reliable than ytdl-core)
-- **Audio Processing:** ffmpeg
-- **Web Framework:** Flask with real-time progress updates
+### Partager avec ses amies
+
+Mets un `APP_PASSWORD`, puis expose le port 7843 avec ton reverse proxy habituel (Nginx Proxy Manager, Caddy, Traefik) ou un tunnel Cloudflare. Bookmallow n'accepte que des liens YouTube et ne convertit qu'une vidéo à la fois : même partagé, il reste sage avec ton Pi.
+
+### YouTube change souvent
+
+`yt-dlp` doit suivre YouTube de près. L'image est reconstruite **chaque lundi** avec la dernière version : un `docker compose pull && docker compose up -d` suffit. En dépannage rapide, `YTDLP_AUTO_UPDATE=1` met yt-dlp à jour au démarrage du conteneur.
+
+### Construire soi-même
+
+```bash
+git clone https://github.com/clemdepernet/bookmallow.git && cd bookmallow
+docker build --target test .        # lance la suite de tests dans l'image
+docker compose up -d --build        # après avoir décommenté `build: .`
+```
+
+---
+
+## 🇬🇧 English
+
+Bookmallow is a tiny self-hosted container: paste a YouTube link, get an audiobook-style MP3 from a pastel web UI that works on your phone. It is built for a Raspberry Pi and for **very** long videos (10 h, 17 h…): audio is converted **while streaming**, the video or raw audio is never written to disk.
+
+### Why
+
+- **No intermediate file**: `yt-dlp` pipes audio straight into `ffmpeg`. A 10-hour video is ~290 MB at 64 kbps mono instead of a 1.5 GB peak with a classic download-then-convert.
+- **Queue**: one conversion at a time, live progress, cancel, recovery after a restart.
+- **Retention**: only the newest `MAX_FILES` files are kept (6 by default). The UI says so and marks the next file to go.
+- **Made to share**: optional password, FR/EN interface, no external resources.
+
+### Quick start
+
+```bash
+mkdir bookmallow && cd bookmallow
+curl -fsSLO https://raw.githubusercontent.com/clemdepernet/bookmallow/main/docker-compose.yml
+docker compose up -d
+```
+
+Open `http://<your-server>:7843`. MP3s land in `./data`.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MAX_FILES` | `6` | MP3s kept; older ones are deleted |
+| `DEFAULT_QUALITY` | `64` | `64` (voice, mono, ~29 MB/h), `128` (~58 MB/h) or `192` (~86 MB/h) |
+| `APP_PASSWORD` | empty | Shared password; empty = no login |
+| `DEFAULT_LANG` | `fr` | `fr` or `en` (each visitor can switch) |
+| `MIN_FREE_MB` | `500` | Disk space to always keep free |
+| `MAX_DURATION_HOURS` | `0` | `0` = no duration limit |
+| `PUID` / `PGID` | `1000` | Owner of the files in `./data` |
+| `TZ` | `UTC` | Log timezone |
+| `YTDLP_AUTO_UPDATE` | `0` | `1` = upgrade yt-dlp at every start |
+| `FORCE_HTTPS` | `0` | `1` behind an HTTPS reverse proxy (`Secure` cookie) |
+| `SECRET_KEY` | generated | Session key, persisted in `/data/.secret` |
+
+### Sharing with friends
+
+Set `APP_PASSWORD`, then expose port 7843 through your usual reverse proxy (Nginx Proxy Manager, Caddy, Traefik) or a Cloudflare tunnel. Bookmallow only accepts YouTube links and converts one video at a time, so it stays gentle with your Pi even when shared.
+
+### YouTube changes often
+
+`yt-dlp` has to keep up with YouTube. The image is rebuilt **every Monday** with the latest release: `docker compose pull && docker compose up -d` is all you need. As a quick fix, `YTDLP_AUTO_UPDATE=1` upgrades yt-dlp when the container starts.
+
+### Build it yourself
+
+```bash
+git clone https://github.com/clemdepernet/bookmallow.git && cd bookmallow
+docker build --target test .        # runs the test suite inside the image
+docker compose up -d --build        # after uncommenting `build: .`
+```
+
+---
+
+## Credits
+
+Bookmallow started as a fork of [TheFatPanda-Dev/youtube-to-mp3-docker](https://github.com/TheFatPanda-Dev/youtube-to-mp3-docker) (MIT). Thank you! The backend was rewritten around streaming conversion, a queue and retention; the pastel UI is new.
+
+Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp), [ffmpeg](https://ffmpeg.org), [Flask](https://flask.palletsprojects.com) and [deno](https://deno.com). MIT license.
