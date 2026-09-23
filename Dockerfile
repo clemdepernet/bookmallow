@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 ARG TARGETARCH
 ARG DENO_VERSION=2.9.7
 ENV PYTHONUNBUFFERED=1 \
