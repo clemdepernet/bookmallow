@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from bookmallow.names import safe_filename, unique_name
 
 VID = "dQw4w9WgXcQ"
@@ -39,3 +41,9 @@ def test_unique_name():
     assert unique_name("b.mp3", existing) == "b.mp3"
     assert unique_name("a.mp3", existing) == "a (3).mp3"
     assert unique_name("noext", {"noext"}) == "noext (2)"
+
+
+def test_max_len_smaller_than_suffix_raises():
+    with pytest.raises(ValueError):
+        safe_filename("Title", VID, max_len=10)
+    assert len(safe_filename("Title", VID, max_len=20)) <= 20
