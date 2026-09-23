@@ -79,7 +79,7 @@ def test_write_ffmetadata_escapes_and_lists_chapters(tmp_path):
     r = req(tmp_path, title="A=B;C", channel="X", chapters=[{"title": "Un", "start": 0, "end": 1.5}, {"title": "Vide", "start": 5, "end": 5}])
     text = cv.write_ffmetadata(r)
     assert text.startswith(";FFMETADATA1\n")
-    assert "title=A\\=B\;C" in text
+    assert "title=A\\=B\\;C" in text
     assert text.count("[CHAPTER]") == 1
     assert "START=0\nEND=1500\ntitle=Un" in text
 
