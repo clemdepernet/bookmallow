@@ -73,3 +73,12 @@ def test_store_trims_finished_jobs_but_keeps_active(tmp_path):
     kept = store.save(jobs)
     assert [j.video_id for j in kept] == ["v2", "v3", "v4"]
     assert [j.video_id for j in store.load()] == ["v2", "v3", "v4"]
+
+
+def test_store_skips_unreadable_rows_but_keeps_the_rest(tmp_path):
+    path = tmp_path / "state.json"
+    good = new_job("u", "v", "64")
+    rows = [good.to_dict(), {**good.to_dict(), "id": "bad00001", "status": "teleporting"}, "not-a-dict"]
+    path.write_text(json.dumps({"version": 1, "jobs": rows}))
+    assert StateStore(path).load() == [good]
+    assert path.exists() and not (tmp_path / "state.json.bad").exists()

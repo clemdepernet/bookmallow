@@ -23,12 +23,21 @@ class StateStore:
             return []
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
-            return [Job.from_dict(item) for item in data["jobs"]]
+            rows = data["jobs"]
+            if not isinstance(rows, list):
+                raise TypeError("jobs is not a list")
         except (ValueError, TypeError, KeyError) as exc:
             bad = self.path.with_name(self.path.name + ".bad")
             log.warning("state file unreadable (%s); moving it to %s", exc, bad)
             os.replace(self.path, bad)
             return []
+        jobs: list[Job] = []
+        for row in rows:
+            try:
+                jobs.append(Job.from_dict(row))
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                log.warning("skipping unreadable job entry (%s): %r", exc, row)
+        return jobs
 
     def trim(self, jobs: list[Job]) -> list[Job]:
         """Drop the oldest finished jobs so at most max_jobs remain; active jobs are never dropped."""
