@@ -1,2 +1,81 @@
-<!doctype html><html lang="{{ config.default_lang }}"><head><meta charset="utf-8"><title>Bookmallow</title></head>
-<body><h1>Bookmallow</h1><p>v{{ version }}</p></body></html>
+<!doctype html>
+<html lang="{{ config.default_lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Bookmallow</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-default-lang="{{ config.default_lang }}" data-default-quality="{{ config.default_quality }}" data-max-files="{{ config.max_files }}">
+  <header class="top">
+    <a class="brand" href="/">
+      <img class="logo" src="{{ url_for('static', filename='logo.svg') }}" alt="" width="56" height="56">
+      <span class="brand-text"><strong>Bookmallow</strong><small data-i18n="tagline"></small></span>
+    </a>
+    <nav class="top-actions">
+      <button id="lang-toggle" class="chip" type="button" aria-label="Language / Langue"></button>
+      {% if config.auth_enabled %}
+      <form method="post" action="{{ url_for('logout') }}"><button class="chip" type="submit" data-i18n="logout"></button></form>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main>
+    <section class="card hero">
+      <h1 data-i18n="hero_title"></h1>
+      <p class="lead" data-i18n="hero_lead"></p>
+      <form id="submit-form" novalidate>
+        <label class="sr-only" for="url" data-i18n="url_label"></label>
+        <div class="url-row">
+          <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                 placeholder="https://www.youtube.com/watch?v=…" required>
+          <button id="submit-btn" class="btn primary" type="submit"><span data-i18n="convert"></span> ✨</button>
+        </div>
+        <fieldset class="qualities" id="qualities">
+          <legend data-i18n="quality"></legend>
+        </fieldset>
+      </form>
+      <p id="form-msg" class="form-msg" role="status" aria-live="polite"></p>
+    </section>
+
+    <aside id="banner" class="banner" role="note"></aside>
+
+    <section class="card">
+      <h2><span data-i18n="queue"></span> <span id="queue-count" class="count"></span></h2>
+      <ul id="jobs" class="cards" aria-live="polite"></ul>
+      <p id="jobs-empty" class="empty" data-i18n="queue_empty"></p>
+    </section>
+
+    <section class="card">
+      <h2><span data-i18n="library"></span> <span id="files-count" class="count"></span></h2>
+      <ul id="files" class="cards"></ul>
+      <p id="files-empty" class="empty" data-i18n="library_empty"></p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Bookmallow v{{ version }}</span> ·
+    <a href="https://github.com/clemdepernet/bookmallow" rel="noopener" target="_blank">GitHub</a> ·
+    <span data-i18n="footer"></span>
+  </footer>
+
+  <dialog id="playlist-dialog" class="dialog">
+    <div class="dialog-body">
+      <h3 id="pl-title"></h3>
+      <p id="pl-intro" class="muted"></p>
+      <ul id="pl-entries" class="pl-entries"></ul>
+      <p id="pl-note" class="note"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn ghost" id="pl-cancel" data-i18n="cancel"></button>
+        <button type="button" class="btn ghost" id="pl-single" data-i18n="pl_single"></button>
+        <button type="button" class="btn primary" id="pl-add"></button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>
