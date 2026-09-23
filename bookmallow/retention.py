@@ -1,18 +1,31 @@
 """Keep only the newest MAX_FILES MP3s (spec §6.5) and clean up partial files (spec §6.8)."""
 from __future__ import annotations
 
+import stat as _stat
 from pathlib import Path
 
 PART_SUFFIX = ".part.mp3"
 
 
+def stat_is_regular(st) -> bool:
+    return _stat.S_ISREG(st.st_mode)
+
+
 def list_mp3(directory: Path) -> list[Path]:
-    """Finished MP3 files, newest first. Partial files are not MP3s yet."""
-    files = [
-        p for p in Path(directory).glob("*.mp3")
-        if p.is_file() and not p.name.endswith(PART_SUFFIX)
-    ]
-    return sorted(files, key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+    """Finished MP3 files, newest first. Partial files are not MP3s yet; files that vanish mid-listing are skipped."""
+    entries: list[tuple[float, str, Path]] = []
+    for path in Path(directory).glob("*.mp3"):
+        if path.name.endswith(PART_SUFFIX):
+            continue
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            continue
+        if not stat_is_regular(st):
+            continue
+        entries.append((st.st_mtime, path.name, path))
+    entries.sort(reverse=True)
+    return [path for _, _, path in entries]
 
 
 def prune(directory: Path, max_files: int) -> list[Path]:
