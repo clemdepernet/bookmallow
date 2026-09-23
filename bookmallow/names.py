@@ -11,12 +11,14 @@ FALLBACK = "audiobook"
 
 
 def safe_filename(title: str | None, video_id: str, ext: str = ".mp3", max_len: int = 120) -> str:
-    """`<title> [<video_id>]<ext>`, stripped of characters that upset any OS."""
+    """`<title> [<video_id>]<ext>`, stripped of characters that upset any OS. Raises ValueError when max_len cannot hold the suffix plus one character."""
     base = unicodedata.normalize("NFC", title or "")
     base = _FORBIDDEN.sub("", base)
     base = _SPACES.sub(" ", base).strip(" .")
     suffix = f" [{video_id}]{ext}"
-    room = max(max_len - len(suffix), 1)
+    room = max_len - len(suffix)
+    if room < 1:
+        raise ValueError(f"max_len={max_len} is too small for suffix {suffix!r}")
     if len(base) > room:
         base = base[:room].rstrip(" .")
     if not base:
