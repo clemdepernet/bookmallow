@@ -14,7 +14,7 @@ Bookmallow est un petit conteneur auto-hébergé : tu colles un lien YouTube, il
 - **Zéro fichier intermédiaire** : `yt-dlp` envoie l'audio directement à `ffmpeg`. Une vidéo de 10 h pèse ~290 Mo en 64 kbps mono, au lieu de 1,5 Go de pic avec un téléchargement classique.
 - **File d'attente** : une conversion à la fois, progression en direct, annulation, reprise après redémarrage.
 - **Rétention** : Bookmallow ne garde que les `MAX_FILES` derniers fichiers (6 par défaut). L'interface le rappelle et marque le prochain fichier qui disparaîtra.
-- **Pour partager** : mot de passe optionnel, interface FR/EN, aucune ressource externe.
+- **Pour partager** : mot de passe optionnel, interface FR/EN, aucun script, style ou police externes (les vignettes des vidéos sont chargées par le navigateur depuis le CDN d'images de YouTube).
 
 ### Démarrer en 3 commandes
 
@@ -41,14 +41,16 @@ Ouvre `http://<ton-serveur>:7843`. Les MP3 arrivent dans `./data`.
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = met yt-dlp à jour à chaque démarrage |
 | `FORCE_HTTPS` | `0` | `1` derrière un reverse proxy HTTPS (cookie `Secure`) |
 | `SECRET_KEY` | générée | Clé des sessions, persistée dans `/data/.secret` |
+| `LOG_LEVEL` | `INFO` | Niveau de log de gunicorn/Flask (`DEBUG`, `INFO`, `WARNING`…) |
+| `DATA_DIR` | `/data` | Dossier des MP3, de `state.json` et de `.secret` |
 
 ### Partager avec ses amies
 
-Mets un `APP_PASSWORD`, puis expose le port 7843 avec ton reverse proxy habituel (Nginx Proxy Manager, Caddy, Traefik) ou un tunnel Cloudflare. Bookmallow n'accepte que des liens YouTube et ne convertit qu'une vidéo à la fois : même partagé, il reste sage avec ton Pi.
+Mets un `APP_PASSWORD`, puis expose le port 7843 avec ton reverse proxy habituel (Nginx Proxy Manager, Caddy, Traefik) ou un tunnel Cloudflare. Bookmallow n'accepte que des liens YouTube et ne convertit qu'une vidéo à la fois : même partagé, il reste sage avec ton Pi. Attention : il n'y a **aucune limitation de tentatives** sur `/login` ; si tu exposes l'app sur Internet, mets une protection devant (Cloudflare Access, une liste d'accès dans Nginx Proxy Manager, ou fail2ban) et active `FORCE_HTTPS=1` derrière un reverse proxy TLS.
 
 ### YouTube change souvent
 
-`yt-dlp` doit suivre YouTube de près. L'image est reconstruite **chaque lundi** avec la dernière version : un `docker compose pull && docker compose up -d` suffit. En dépannage rapide, `YTDLP_AUTO_UPDATE=1` met yt-dlp à jour au démarrage du conteneur.
+`yt-dlp` doit suivre YouTube de près. L'image est reconstruite **chaque lundi** avec la dernière version : un `docker compose pull && docker compose up -d` suffit. En dépannage rapide, `YTDLP_AUTO_UPDATE=1` met yt-dlp à jour au démarrage du conteneur. Une erreur « vérification anti-robot » signifie que YouTube challenge l'adresse IP du serveur : mettre yt-dlp à jour (`YTDLP_AUTO_UPDATE=1`) ou patienter quelques heures résout généralement le problème.
 
 ### Construire soi-même
 
@@ -69,7 +71,7 @@ Bookmallow is a tiny self-hosted container: paste a YouTube link, get an audiobo
 - **No intermediate file**: `yt-dlp` pipes audio straight into `ffmpeg`. A 10-hour video is ~290 MB at 64 kbps mono instead of a 1.5 GB peak with a classic download-then-convert.
 - **Queue**: one conversion at a time, live progress, cancel, recovery after a restart.
 - **Retention**: only the newest `MAX_FILES` files are kept (6 by default). The UI says so and marks the next file to go.
-- **Made to share**: optional password, FR/EN interface, no external resources.
+- **Made to share**: optional password, FR/EN interface, no external scripts, styles or fonts (video thumbnails are loaded by the browser from YouTube's image CDN).
 
 ### Quick start
 
@@ -96,14 +98,16 @@ Open `http://<your-server>:7843`. MP3s land in `./data`.
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = upgrade yt-dlp at every start |
 | `FORCE_HTTPS` | `0` | `1` behind an HTTPS reverse proxy (`Secure` cookie) |
 | `SECRET_KEY` | generated | Session key, persisted in `/data/.secret` |
+| `LOG_LEVEL` | `INFO` | gunicorn/Flask log level (`DEBUG`, `INFO`, `WARNING`…) |
+| `DATA_DIR` | `/data` | Folder for the MP3s, `state.json` and `.secret` |
 
 ### Sharing with friends
 
-Set `APP_PASSWORD`, then expose port 7843 through your usual reverse proxy (Nginx Proxy Manager, Caddy, Traefik) or a Cloudflare tunnel. Bookmallow only accepts YouTube links and converts one video at a time, so it stays gentle with your Pi even when shared.
+Set `APP_PASSWORD`, then expose port 7843 through your usual reverse proxy (Nginx Proxy Manager, Caddy, Traefik) or a Cloudflare tunnel. Bookmallow only accepts YouTube links and converts one video at a time, so it stays gentle with your Pi even when shared. Note that there is **no rate limiting** on `/login`; if you expose the app to the internet, put a guard in front of it (Cloudflare Access, an Nginx Proxy Manager access list, or fail2ban) and set `FORCE_HTTPS=1` behind a TLS-terminating reverse proxy.
 
 ### YouTube changes often
 
-`yt-dlp` has to keep up with YouTube. The image is rebuilt **every Monday** with the latest release: `docker compose pull && docker compose up -d` is all you need. As a quick fix, `YTDLP_AUTO_UPDATE=1` upgrades yt-dlp when the container starts.
+`yt-dlp` has to keep up with YouTube. The image is rebuilt **every Monday** with the latest release: `docker compose pull && docker compose up -d` is all you need. As a quick fix, `YTDLP_AUTO_UPDATE=1` upgrades yt-dlp when the container starts. A "bot check" error means YouTube is challenging the server's IP address: updating yt-dlp (`YTDLP_AUTO_UPDATE=1`) or waiting a while usually resolves it.
 
 ### Build it yourself
 

@@ -321,3 +321,40 @@ en CI.
 Dossier `~/bookmallow-stack/` séparé de `~/media-stack` (projet Compose indépendant, ajouté à
 `stacks.sh`), port hôte `7843` (libre), `TZ=Asia/Kuala_Lumpur`, `PUID/PGID=1000`, volume
 `./data`. Exposition éventuelle via Nginx Proxy Manager déjà en place.
+
+
+## 15. Écarts constatés à l'implémentation (v1.0.0)
+
+Relevés lors de la revue finale de branche ; le comportement livré est correct, seul le texte
+ci-dessous documente l'écart avec les sections précédentes.
+
+- **Deux groupes de processus au lieu d'un** : `yt-dlp` et `ffmpeg` sont chacun lancés avec
+  `start_new_session=True` sur leur propre `Popen`, donc dans deux groupes de processus distincts
+  plutôt qu'un seul groupe partagé. `cancel()` envoie SIGTERM/SIGKILL aux deux groupes (et donc
+  aussi au sous-processus deno de `yt-dlp`), le comportement observable ne change pas.
+- **Plancher de version yt-dlp plutôt qu'épinglage** : `requirements.txt` fixe
+  `yt-dlp[default]>=2026.1.1` (un plancher) et non une version exacte comme décrit en §13.
+  L'image étant reconstruite chaque semaine (§11, §13), ce choix est défendable et assumé ; en
+  contrepartie, Dependabot n'ouvrira pas de PR pip tant que le plancher est satisfait.
+- **Aperçu de playlist plafonné à 200 entrées, jobs plafonnés à `MAX_FILES`** : la modale playlist
+  (§10) affiche jusqu'à 200 entrées pour que la personne choisisse (au lieu de tronquer
+  directement à `MAX_FILES`) ; seule la soumission effective des jobs reste plafonnée à
+  `MAX_FILES`. Le yt-dlp sous-jacent est aussi borné côté serveur par `--playlist-items :200`
+  pour éviter qu'une playlist de plusieurs milliers d'entrées ne consomme le timeout de la
+  requête (finding de revue #5).
+- **`--no-part` non utilisé** : sans objet avec `-o -` (sortie sur stdout), donc jamais ajouté à
+  la commande `yt-dlp` (contrairement à une mention possible en §6.3/§13).
+- **`/api/state.config` expose aussi `default_lang` et `auth_enabled`** en plus des champs déjà
+  décrits en §7, pour que le frontend n'ait pas à deviner ces informations autrement.
+- **Les `list=` de mix/radio YouTube (`RD…`, `UL…`) sont ignorés** : `urls.parse` ne les traite
+  plus comme un identifiant de playlist valide, seul l'identifiant vidéo est conservé. Ces liens
+  (fréquents depuis un partage « lecture automatique ») ne sont de toute façon pas lisibles par
+  `yt-dlp` en tant que playlist.
+- **`GET /api/files/…` sans session redirige vers `/login`** : les autres routes `/api/` non
+  authentifiées renvoient toujours un 401 JSON (§8), mais un `GET` de téléchargement est presque
+  toujours suivi depuis un onglet de navigateur ou un lien cliqué, pas depuis le JavaScript de
+  l'app ; un 401 JSON brut n'y est pas actionnable.
+- **En-têtes de sécurité ajoutés** : `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
+  et une `Content-Security-Policy` (`default-src 'self'`, images autorisées depuis le CDN
+  vignettes de YouTube, `frame-ancestors 'none'`) sont posés sur chaque réponse via
+  `after_request`, non décrits explicitement en §7/§10.
