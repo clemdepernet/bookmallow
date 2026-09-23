@@ -245,7 +245,7 @@ Pas de WebSocket : plus simple derrière Nginx Proxy Manager et Cloudflare.
 | `APP_PASSWORD` | vide | mot de passe partagé, vide = désactivé |
 | `SECRET_KEY` | généré | clé de signature des sessions |
 | `MIN_FREE_MB` | `500` | marge d'espace disque à garder |
-| `MAX_DURATION_HOURS` | `14` | refus des vidéos plus longues |
+| `MAX_DURATION_HOURS` | `0` | `0` = aucune limite (un livre de 17 h passe) ; une valeur > 0 refuse les vidéos plus longues, utile pour un hébergement public |
 | `DEFAULT_LANG` | `fr` | `fr` ou `en`, l'utilisatrice peut basculer (stocké en localStorage) |
 | `TZ` | `UTC` | affichage des dates dans les logs |
 | `PUID` / `PGID` | `1000` | propriétaire des fichiers écrits dans le volume (entrypoint) |
@@ -276,7 +276,7 @@ Une page, mobile d'abord, sans framework ni CDN (fonctionne hors ligne sur le LA
 |---|---|
 | URL non YouTube | 400, message « Bookmallow n'accepte que les liens YouTube » |
 | Vidéo privée / supprimée / âge / géo | job `failed`, message traduit à partir du stderr yt-dlp |
-| Durée > `MAX_DURATION_HOURS` | job `failed` avant conversion |
+| Durée > `MAX_DURATION_HOURS` (si > 0) | job `failed` avant conversion |
 | Disque insuffisant | job `failed` avant conversion |
 | ffmpeg ou yt-dlp code ≠ 0 | job `failed`, `.part.mp3` supprimé, 20 dernières lignes stderr dans les logs |
 | Redémarrage pendant une conversion | job `failed` « interrompu », `.part.mp3` supprimé |
