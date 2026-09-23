@@ -112,6 +112,28 @@ data/
 .env
 ```
 
+`bookmallow/config.py` (version minimale, complétée en Task 2 ; ne pas ajouter `load` ici) :
+```python
+"""Runtime configuration read from environment variables (spec §9)."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class Config:
+    data_dir: Path
+    max_files: int
+    default_quality: str
+    app_password: str
+    secret_key: str
+    min_free_mb: int
+    max_duration_hours: float
+    default_lang: str
+    force_https: bool
+```
+
 `tests/conftest.py` :
 ```python
 from __future__ import annotations
@@ -151,7 +173,7 @@ def test_version_is_semver():
 ```bash
 cd /home/clem/bookmallow && python3 -m venv .venv && .venv/bin/pip install -q -r requirements-dev.txt && .venv/bin/pytest tests/test_smoke.py
 ```
-Attendu : `1 passed` (le test échoue avant l'implémentation de `config.py` en Task 2 uniquement si conftest importe Config ; pour ce premier run, laisser conftest importer Config échouera : créer d'abord un `bookmallow/config.py` minimal contenant seulement la dataclass `Config` de la Task 2 Step 3, sans `load`). Si l'installation de `yt-dlp[default]` est lente sur le Pi, c'est normal (≈ 1 min).
+Attendu : `1 passed`. Si l'installation de `yt-dlp[default]` est lente sur le Pi, c'est normal (≈ 1 min).
 
 - [ ] **Step 4 : Commit**
 
@@ -1929,7 +1951,7 @@ def test_retention_runs_after_each_job(config):
         queue.process_next(block=False)
         path = config.data_dir / f"Titre {c * 11} [{c * 11}].mp3"
         if path.exists():
-            t = 1_800_000_000 + i
+            t = 1_700_000_000 + i  # in the past, increasing: a < b < c
             os.utime(path, (t, t))
     names = sorted(p.name for p in config.data_dir.glob("*.mp3"))
     assert names == ["Titre bbbbbbbbbbb [bbbbbbbbbbb].mp3", "Titre ccccccccccc [ccccccccccc].mp3"]
@@ -2824,9 +2846,9 @@ def test_palette_tokens_present():
 
 def test_i18n_has_both_languages_with_same_keys():
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
-    fr = re.search(r"fr:\s*\{(.*?)\n  \},", js, re.S).group(1)
-    en = re.search(r"en:\s*\{(.*?)\n  \},", js, re.S).group(1)
-    keys = lambda block: set(re.findall(r"^\s{4}(\w+):", block, re.M))  # noqa: E731
+    fr = re.search(r"\n    fr: \{(.*?)\n    \},", js, re.S).group(1)
+    en = re.search(r"\n    en: \{(.*?)\n    \},", js, re.S).group(1)
+    keys = lambda block: set(re.findall(r"^\s+(\w+):", block, re.M))  # noqa: E731
     assert keys(fr) == keys(en) and len(keys(fr)) > 40
 ```
 
