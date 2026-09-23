@@ -1,18 +1,24 @@
+# Bookmallow — YouTube → audiobook MP3, self-hosted.
+# Image publique multi-arch (amd64, arm64). Décommente `build: .` pour construire toi-même.
 services:
-  youtube-downloader:
-    build: .
-    container_name: youtube-downloader
+  bookmallow:
+    image: ghcr.io/clemdepernet/bookmallow:latest
+    # build: .
+    container_name: bookmallow
     ports:
       - "7843:5000"
     volumes:
-      - ./downloads:/app/downloads
-      - /etc/localtime:/etc/localtime:ro
+      - ./data:/data
     environment:
-      - FLASK_ENV=production
-      - PYTHONUNBUFFERED=1
+      - TZ=Europe/Paris
+      - PUID=1000
+      - PGID=1000
+      - MAX_FILES=6            # nombre de MP3 conservés / MP3s kept
+      - DEFAULT_QUALITY=64     # 64 (voix, mono) | 128 | 192
+      - DEFAULT_LANG=fr        # fr | en
+      # - APP_PASSWORD=change-me   # mot de passe partagé, vide = désactivé / shared password, empty = off
+      # - MIN_FREE_MB=500          # marge d'espace disque à garder / free space to keep
+      # - MAX_DURATION_HOURS=0     # 0 = pas de limite / no limit
+      # - YTDLP_AUTO_UPDATE=1      # met yt-dlp à jour au démarrage / update yt-dlp at start
+      # - FORCE_HTTPS=1            # cookie Secure derrière un reverse proxy HTTPS
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
