@@ -52,7 +52,7 @@ def test_security_headers_present(client):
     assert r.headers["X-Content-Type-Options"] == "nosniff"
     csp = r.headers["Content-Security-Policy"]
     assert "default-src 'self'" in csp
-    assert "img-src 'self' data: https://i.ytimg.com https://*.ggpht.com" in csp
+    assert "img-src 'self' data: https://*.ytimg.com https://*.ggpht.com" in csp
     assert "frame-ancestors 'none'" in csp
 
 

@@ -173,7 +173,7 @@ def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, s
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data: https://i.ytimg.com https://*.ggpht.com; "
+            "default-src 'self'; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; "
             "frame-ancestors 'none'"
         )
         return response
