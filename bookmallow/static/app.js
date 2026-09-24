@@ -61,6 +61,43 @@
       e_ffmpeg: "Erreur de conversion",
       e_internal: "Erreur interne",
       e_bot: "YouTube demande une vérification anti-robot depuis ce serveur",
+      tab_convert: "✨ Convertir",
+      tab_store: "📚 Magasin",
+      store_title: "Trouve ton prochain livre 📚",
+      store_lead: "Cherche un titre ou un auteur : livres libres (LibriVox, Internet Archive) et, si c'est activé, tes indexeurs.",
+      store_q_label: "Titre ou auteur",
+      store_search: "Chercher",
+      store_lang: "Langue",
+      store_lang_fr: "Français",
+      store_lang_en: "English",
+      store_lang_all: "Toutes",
+      store_hint: "Tape au moins deux lettres.",
+      store_searching: "Recherche en cours…",
+      store_none: "Aucun livre trouvé. Essaie un autre mot, ou l'autre langue.",
+      store_add: "Ajouter à la file",
+      store_added: "Livre ajouté à la file 📚",
+      store_free: "Libre",
+      store_torrent: "Torrent",
+      store_seeders: "{n} sources",
+      store_provider_down: "Source indisponible : {names}",
+      store_provider_busy: "Prowlarr est occupé, réessaie dans un instant",
+      store_disabled: "Le magasin n'est pas activé sur ce serveur.",
+      store_duplicate: "Ce livre est déjà dans la file.",
+      store_not_found: "Livre introuvable, relance la recherche.",
+      status_book_fetching_free: "Préparation du livre…",
+      status_book_fetching_torrent: "Téléchargement du torrent…",
+      status_book_converting: "Assemblage du M4B…",
+      file_book: "Livre",
+      e_store_disabled: "Cette source n'est pas activée sur ce serveur",
+      e_not_found: "Livre introuvable",
+      e_provider_error: "La source ne répond pas",
+      e_no_tracks: "Aucune piste audio trouvée",
+      e_no_audio: "Aucune piste audio trouvée",
+      e_torrent_add: "qBittorrent a refusé le torrent",
+      e_torrent_error: "Erreur de téléchargement du torrent",
+      e_torrent_stalled: "Torrent sans source, abandonné",
+      e_qbt_auth: "Connexion à qBittorrent refusée",
+      e_busy: "Source occupée, réessaie",
       hours: "h", minutes: "min",
       lang_switch: "English",
       status_line_idle: "Aucune conversion en cours",
@@ -124,6 +161,43 @@
       e_ffmpeg: "Conversion error",
       e_internal: "Internal error",
       e_bot: "YouTube is asking this server for a bot check",
+      tab_convert: "✨ Convert",
+      tab_store: "📚 Store",
+      store_title: "Find your next book 📚",
+      store_lead: "Search a title or an author: free books (LibriVox, Internet Archive) and, when enabled, your indexers.",
+      store_q_label: "Title or author",
+      store_search: "Search",
+      store_lang: "Language",
+      store_lang_fr: "Français",
+      store_lang_en: "English",
+      store_lang_all: "All",
+      store_hint: "Type at least two letters.",
+      store_searching: "Searching…",
+      store_none: "No book found. Try another word, or the other language.",
+      store_add: "Add to queue",
+      store_added: "Book added to the queue 📚",
+      store_free: "Free",
+      store_torrent: "Torrent",
+      store_seeders: "{n} seeders",
+      store_provider_down: "Source unavailable: {names}",
+      store_provider_busy: "Prowlarr is busy, try again in a moment",
+      store_disabled: "The store is not enabled on this server.",
+      store_duplicate: "This book is already queued.",
+      store_not_found: "Book not found, search again.",
+      status_book_fetching_free: "Preparing the book…",
+      status_book_fetching_torrent: "Downloading the torrent…",
+      status_book_converting: "Assembling the M4B…",
+      file_book: "Book",
+      e_store_disabled: "This source is not enabled on this server",
+      e_not_found: "Book not found",
+      e_provider_error: "The source is not answering",
+      e_no_tracks: "No audio track found",
+      e_no_audio: "No audio track found",
+      e_torrent_add: "qBittorrent refused the torrent",
+      e_torrent_error: "Torrent download error",
+      e_torrent_stalled: "Torrent without seeders, abandoned",
+      e_qbt_auth: "qBittorrent login refused",
+      e_busy: "Source busy, try again",
       hours: "h", minutes: "min",
       lang_switch: "Français",
       status_line_idle: "No conversion running",
@@ -153,11 +227,17 @@
     lang: store.get("bookmallow.lang") || body.dataset.defaultLang || "fr",
     quality: store.get("bookmallow.quality") || body.dataset.defaultQuality || "64",
     maxFiles: Number(body.dataset.maxFiles || 6),
+    tab: store.get("bookmallow.tab") || "convert",
+    storeLang: store.get("bookmallow.storeLang") || body.dataset.defaultLang || "all",
+    storeEnabled: body.dataset.storeEnabled === "1",
+    storeResults: [],
     data: null,
     timer: null,
     pendingPlaylist: null,
   };
   if (!I18N[state.lang]) state.lang = "fr";
+  if (!["fr", "en", "all"].includes(state.storeLang)) state.storeLang = "all";
+  if (!state.storeEnabled) state.tab = "convert";
 
   const t = (key, vars = {}) => {
     const text = (I18N[state.lang] && I18N[state.lang][key]) || I18N.fr[key] || key;
@@ -186,6 +266,8 @@
     document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
     $("#lang-toggle").textContent = t("lang_switch");
     renderQualities();
+    renderStoreLangs();
+    if (state.storeResults.length) renderStoreResults(state.storeResults, {});
     if (state.data) render(state.data);
   }
 
@@ -197,6 +279,97 @@
       const input = el("input", { type: "radio", name: "quality", id, value: q, onchange: () => { state.quality = q; store.set("bookmallow.quality", q); } });
       if (q === state.quality) input.checked = true;
       box.append(el("div", { class: "quality" }, [input, el("label", { for: id }, [el("b", { text: t(`q${q}`) }), el("small", { text: t(`q${q}_hint`) })])]));
+    }
+  }
+
+  function setTab(name) {
+    state.tab = state.storeEnabled && name === "store" ? "store" : "convert";
+    store.set("bookmallow.tab", state.tab);
+    for (const n of ["convert", "store"]) {
+      const active = n === state.tab;
+      $(`#tab-${n}`).classList.toggle("active", active);
+      $(`#tab-${n}`).setAttribute("aria-selected", String(active));
+      $(`#panel-${n}`).classList.toggle("hidden", !active);
+    }
+    $("#tab-store").classList.toggle("hidden", !state.storeEnabled);
+  }
+
+  function renderStoreLangs() {
+    const box = $("#store-langs");
+    box.querySelectorAll(".quality").forEach((n) => n.remove());
+    for (const l of ["fr", "en", "all"]) {
+      const id = `sl-${l}`;
+      const input = el("input", { type: "radio", name: "store-lang", id, value: l, onchange: () => { state.storeLang = l; store.set("bookmallow.storeLang", l); } });
+      if (l === state.storeLang) input.checked = true;
+      box.append(el("div", { class: "quality" }, [input, el("label", { for: id }, [el("b", { text: t(`store_lang_${l}`) })])]));
+    }
+  }
+
+  function setStoreMsg(text, kind = "") {
+    const node = $("#store-msg");
+    node.textContent = text;
+    node.className = `form-msg ${kind}`;
+  }
+
+  function resultCard(r) {
+    const meta = [];
+    if (r.author) meta.push(el("span", { text: r.author }));
+    if (r.duration) meta.push(el("span", { text: fmtDuration(r.duration) }));
+    if (r.size_bytes) meta.push(el("span", { text: fmtSize(r.size_bytes) }));
+    if (r.language) meta.push(el("span", { text: r.language.toUpperCase() }));
+    const free = r.source !== "prowlarr";
+    const badge = el("span", { class: `badge ${free ? "free" : "torrent"}`, text: free ? t("store_free") : `${t("store_torrent")} · ${t("store_seeders", { n: r.seeders ?? 0 })}` });
+    const actions = el("div", { class: "item-actions" }, [badge,
+      el("button", { class: "btn primary small", type: "button", text: t("store_add"), onclick: (e) => addBook(r.key, e.currentTarget) })]);
+    if (r.url) actions.append(el("a", { class: "btn ghost small", href: r.url, target: "_blank", rel: "noopener", text: "↗" }));
+    const cover = free ? thumb(r.cover, "📚") : thumb(null, "🧲");
+    return el("li", { class: "result", "data-key": r.key }, [cover, el("div", { class: "result-body" }, [
+      el("div", { class: "item-title", text: r.title }), el("div", { class: "result-meta" }, meta), actions])]);
+  }
+
+  function renderStoreResults(results, providers) {
+    state.storeResults = results;
+    $("#store-results").replaceChildren(...results.map(resultCard));
+    const down = Object.entries(providers || {}).filter(([, v]) => v === "error").map(([k]) => k);
+    const busy = Object.values(providers || {}).includes("busy");
+    const note = $("#store-providers");
+    note.textContent = busy ? t("store_provider_busy") : (down.length ? t("store_provider_down", { names: down.join(", ") }) : "");
+    note.classList.toggle("hidden", !note.textContent);
+    setStoreMsg(results.length ? "" : t("store_none"));
+  }
+
+  async function storeSearch() {
+    const q = $("#store-q").value.trim();
+    if (q.length < 2) { setStoreMsg(t("store_hint"), "error"); return; }
+    const btn = $("#store-btn");
+    btn.disabled = true;
+    setStoreMsg(t("store_searching"));
+    try {
+      const { status, payload } = await api(`/api/store/search?q=${encodeURIComponent(q)}&lang=${encodeURIComponent(state.storeLang)}`);
+      if (status === 200) renderStoreResults(payload.results, payload.providers);
+      else if (status === 503) setStoreMsg(t("store_disabled"), "error");
+      else setStoreMsg(t("e_internal"), "error");
+    } catch (err) {
+      if (err.network) setStoreMsg(t("err_network"), "error");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function addBook(key, button) {
+    if (button) button.disabled = true;
+    try {
+      const { status, payload } = await api("/api/store/jobs", { method: "POST", body: JSON.stringify({ key, quality: state.quality }) });
+      if (status === 201) { toast(t("store_added"), "ok"); refresh(); }
+      else if (status === 409) toast(t("store_duplicate"), "error");
+      else if (status === 404) toast(t("store_not_found"), "error");
+      else if (status === 400 && payload.error === "store_disabled") toast(t("e_store_disabled"), "error");
+      else if (status === 502) toast(t("e_provider_error"), "error");
+      else toast(t("e_internal"), "error");
+    } catch (err) {
+      if (err.network) toast(t("err_network"), "error");
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 
@@ -226,28 +399,34 @@
 
   // ---- rendering ---------------------------------------------------------------------
 
-  function thumb(url) {
+  function thumb(url, fallback = "🎧") {
     const box = el("div", { class: "thumb" });
     if (url) box.append(el("img", { src: url, alt: "", loading: "lazy", referrerpolicy: "no-referrer" }));
-    else box.textContent = "🎧";
+    else box.textContent = fallback;
     return box;
   }
 
-  function statusPill(status) {
-    return el("span", { class: `pill ${status}` }, [el("span", { class: "dot" }), document.createTextNode(t(`status_${status}`))]);
+  function statusPill(status, label) {
+    return el("span", { class: `pill ${status}` }, [el("span", { class: "dot" }), document.createTextNode(label || t(`status_${status}`))]);
   }
 
   function jobCard(job) {
+    const isBook = job.kind === "book";
     const meta = [];
-    if (job.channel) meta.push(el("span", { text: job.channel }));
+    if (isBook && job.author) meta.push(el("span", { text: job.author }));
+    if (!isBook && job.channel) meta.push(el("span", { text: job.channel }));
     if (job.duration) meta.push(el("span", { text: fmtDuration(job.duration) }));
-    meta.push(el("span", { text: t(`q${job.quality}`) }));
+    if (isBook) meta.push(el("span", { text: job.source === "prowlarr" ? t("store_torrent") : t("store_free") }));
+    else meta.push(el("span", { text: t(`q${job.quality}`) }));
+    const statusLabel = !isBook ? null
+      : job.status === "fetching" ? t(job.source === "prowlarr" ? "status_book_fetching_torrent" : "status_book_fetching_free")
+      : job.status === "converting" ? t("status_book_converting") : null;
     const bodyParts = [
       el("div", { class: "item-title", text: job.title || job.url }),
       el("div", { class: "item-meta" }, meta),
-      el("div", { class: "item-actions" }, [statusPill(job.status)]),
+      el("div", { class: "item-actions" }, [statusPill(job.status, statusLabel)]),
     ];
-    if (job.status === "converting") {
+    if (job.status === "converting" || (isBook && job.status === "fetching" && job.progress > 0)) {
       const bar = el("div", { class: `progress${job.progress > 0 ? "" : " indeterminate"}` }, [el("span")]);
       if (job.progress > 0) bar.firstChild.style.width = `${job.progress}%`;
       bodyParts.push(bar);
@@ -267,27 +446,32 @@
     if (["queued", "fetching", "converting"].includes(job.status)) {
       bodyParts[2].append(el("button", { class: "btn ghost small", type: "button", text: t("cancel"), onclick: () => cancelJob(job.id) }));
     }
-    return el("li", { class: `item${job.expired ? " expired" : ""}`, "data-id": job.id }, [thumb(job.thumbnail), el("div", { class: "item-body" }, bodyParts)]);
+    return el("li", { class: `item${job.expired ? " expired" : ""}`, "data-id": job.id }, [thumb(job.thumbnail, isBook ? "📚" : "🎧"), el("div", { class: "item-body" }, bodyParts)]);
   }
 
   function fileCard(file, nextToGo) {
     const meta = [];
     if (file.channel) meta.push(el("span", { text: file.channel }));
+    if (file.author) meta.push(el("span", { text: file.author }));
     if (file.duration) meta.push(el("span", { text: fmtDuration(file.duration) }));
     meta.push(el("span", { text: fmtSize(file.size_bytes) }));
     if (file.quality) meta.push(el("span", { text: t(`q${file.quality}`) }));
     meta.push(el("span", { text: fmtDate(file.modified_at) }));
-    const actions = el("div", { class: "item-actions" }, [
+    const actions = el("div", { class: "item-actions" }, []);
+    if (file.kind === "book") actions.append(el("span", { class: "badge book", text: t("file_book") }));
+    actions.append(
       el("a", { class: "btn primary small", href: `/api/files/${encodeURIComponent(file.name)}`, text: t("download") }),
       el("button", { class: "btn ghost small danger", type: "button", text: t("delete"), onclick: () => deleteFile(file) }),
-    ]);
+    );
     if (file.name === nextToGo) actions.append(el("span", { class: "badge", text: `⏳ ${t("next_to_go")}` }));
-    return el("li", { class: "item" }, [thumb(file.thumbnail), el("div", { class: "item-body" }, [
+    return el("li", { class: "item" }, [thumb(file.thumbnail, file.kind === "book" ? "📚" : "🎧"), el("div", { class: "item-body" }, [
       el("div", { class: "item-title", text: file.title }), el("div", { class: "item-meta" }, meta), actions])]);
   }
 
   function render(data) {
     state.data = data;
+    state.storeEnabled = !!(data.store && data.store.enabled);
+    setTab(state.tab);
     const maxFiles = data.retention.max_files;
     $("#banner").textContent = maxFiles === 1 ? t("banner_one") : t("banner", { n: maxFiles });
 
@@ -414,6 +598,9 @@
   // ---- wiring ------------------------------------------------------------------------
 
   $("#submit-form").addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+  $("#tab-convert").addEventListener("click", () => setTab("convert"));
+  $("#tab-store").addEventListener("click", () => setTab("store"));
+  $("#store-form").addEventListener("submit", (e) => { e.preventDefault(); storeSearch(); });
   $("#url").addEventListener("paste", () => setTimeout(() => { if ($("#url").value.trim()) submit(); }, 50));
   $("#lang-toggle").addEventListener("click", () => {
     state.lang = state.lang === "fr" ? "en" : "fr";
@@ -425,6 +612,7 @@
   $("#pl-add").addEventListener("click", () => submit({ playlist: "expand", video_ids: selectedPlaylistIds() }));
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 
+  setTab(state.tab);
   applyI18n();
   refresh();
 })();

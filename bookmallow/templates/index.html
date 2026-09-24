@@ -8,7 +8,7 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body data-default-lang="{{ config.default_lang }}" data-default-quality="{{ config.default_quality }}" data-max-files="{{ config.max_files }}">
+<body data-default-lang="{{ config.default_lang }}" data-default-quality="{{ config.default_quality }}" data-max-files="{{ config.max_files }}" data-store-enabled="{{ 1 if config.store_enabled else 0 }}">
   <header class="top">
     <a class="brand" href="/">
       <img class="logo" src="{{ url_for('static', filename='logo.svg') }}" alt="" width="56" height="56">
@@ -24,20 +24,45 @@
 
   <main>
     <section class="card hero">
-      <h1 data-i18n="hero_title"></h1>
-      <p class="lead" data-i18n="hero_lead"></p>
-      <form id="submit-form" novalidate>
-        <label class="sr-only" for="url" data-i18n="url_label"></label>
-        <div class="url-row">
-          <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
-                 placeholder="https://www.youtube.com/watch?v=…" required>
-          <button id="submit-btn" class="btn primary" type="submit"><span data-i18n="convert"></span> ✨</button>
-        </div>
-        <fieldset class="qualities" id="qualities">
-          <legend data-i18n="quality"></legend>
-        </fieldset>
-      </form>
-      <p id="form-msg" class="form-msg" role="status" aria-live="polite"></p>
+      <div class="tabs" role="tablist" aria-label="Bookmallow">
+        <button id="tab-convert" class="tab active" type="button" role="tab" aria-selected="true" aria-controls="panel-convert" data-i18n="tab_convert"></button>
+        <button id="tab-store" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-store" data-i18n="tab_store"></button>
+      </div>
+
+      <div id="panel-convert" class="panel" role="tabpanel">
+        <h1 data-i18n="hero_title"></h1>
+        <p class="lead" data-i18n="hero_lead"></p>
+        <form id="submit-form" novalidate>
+          <label class="sr-only" for="url" data-i18n="url_label"></label>
+          <div class="url-row">
+            <input id="url" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://www.youtube.com/watch?v=…" required>
+            <button id="submit-btn" class="btn primary" type="submit"><span data-i18n="convert"></span> ✨</button>
+          </div>
+          <fieldset class="qualities" id="qualities">
+            <legend data-i18n="quality"></legend>
+          </fieldset>
+        </form>
+        <p id="form-msg" class="form-msg" role="status" aria-live="polite"></p>
+      </div>
+
+      <div id="panel-store" class="panel hidden" role="tabpanel">
+        <h1 data-i18n="store_title"></h1>
+        <p class="lead" data-i18n="store_lead"></p>
+        <form id="store-form" novalidate>
+          <label class="sr-only" for="store-q" data-i18n="store_q_label"></label>
+          <div class="url-row">
+            <input id="store-q" name="q" type="search" autocomplete="off" spellcheck="false" minlength="2" maxlength="100" required>
+            <button id="store-btn" class="btn primary" type="submit"><span data-i18n="store_search"></span> 🔍</button>
+          </div>
+          <fieldset class="qualities" id="store-langs">
+            <legend data-i18n="store_lang"></legend>
+          </fieldset>
+        </form>
+        <p id="store-msg" class="form-msg" role="status" aria-live="polite"></p>
+        <p id="store-providers" class="note hidden"></p>
+        <ul id="store-results" class="results"></ul>
+      </div>
     </section>
 
     <aside id="banner" class="banner" role="note"></aside>

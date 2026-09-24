@@ -21,7 +21,10 @@ def test_index_has_hooks_and_static_assets(config):
     c = client(config)
     html = c.get("/").get_data(as_text=True)
     for hook in ('id="submit-form"', 'id="url"', 'id="qualities"', 'id="banner"', 'id="jobs"', 'id="files"',
-                 'id="playlist-dialog"', 'id="lang-toggle"', 'data-default-quality="64"', 'data-max-files="6"'):
+                 'id="playlist-dialog"', 'id="lang-toggle"', 'data-default-quality="64"', 'data-max-files="6"',
+                 'id="tab-convert"', 'id="tab-store"', 'id="panel-convert"', 'id="panel-store"',
+                 'id="store-form"', 'id="store-q"', 'id="store-langs"', 'id="store-results"',
+                 'data-store-enabled="1"'):
         assert hook in html
     assert 'action="/logout"' not in html  # auth disabled → no logout button
     for asset in ("/static/style.css", "/static/app.js", "/static/logo.svg"):
@@ -29,6 +32,19 @@ def test_index_has_hooks_and_static_assets(config):
         r = c.get(asset)
         assert r.status_code == 200
         r.close()
+
+
+def test_store_tab_hidden_when_disabled(config):
+    from dataclasses import replace
+    html = client(replace(config, store_enabled=False)).get("/").get_data(as_text=True)
+    assert 'data-store-enabled="0"' in html
+
+
+def test_i18n_has_store_keys():
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    for key in ("tab_convert", "tab_store", "store_search", "store_add", "store_free", "store_torrent", "e_torrent_stalled",
+                "e_qbt_auth", "e_no_audio", "status_book_fetching_torrent", "status_book_converting", "file_book"):
+        assert f"\n      {key}:" in js, key
 
 
 def test_no_external_resources():
