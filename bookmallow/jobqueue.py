@@ -172,6 +172,31 @@ class JobQueue:
             conv.cancel()
         return True
 
+    def remove(self, job_id: str) -> bool:
+        """Forget a finished job (failed, cancelled or done). Active jobs must be cancelled first."""
+        with self._lock:
+            job = self.get(job_id)
+            if job is None or job.is_active:
+                return False
+            self.jobs = [j for j in self.jobs if j.id != job_id]
+            self._results.pop(job_id, None)
+            self._save()
+            return True
+
+    def clear_history(self) -> int:
+        """Forget every finished job except the done ones whose file is still in the library."""
+        with self._lock:
+            present = {p.name for p in retention.list_audio(self.config.data_dir)}
+            keep = [j for j in self.jobs if j.is_active or (j.status is Status.DONE and j.filename in present)]
+            removed = len(self.jobs) - len(keep)
+            if removed:
+                for j in self.jobs:
+                    if j not in keep:
+                        self._results.pop(j.id, None)
+                self.jobs = keep
+                self._save()
+            return removed
+
     def snapshot(self) -> list[dict]:
         with self._lock:
             return [j.to_dict() for j in self.jobs]

@@ -100,6 +100,9 @@
       e_busy: "Source occupée, réessaie",
       hours: "h", minutes: "min",
       lang_switch: "English",
+      clear_history: "Vider l'historique",
+      history_cleared: "Historique vidé",
+      dismiss: "Retirer",
       status_line_idle: "Aucune conversion en cours",
       status_line_active: "{n} conversion(s) en cours, {pct} %",
     },
@@ -200,6 +203,9 @@
       e_busy: "Source busy, try again",
       hours: "h", minutes: "min",
       lang_switch: "Français",
+      clear_history: "Clear history",
+      history_cleared: "History cleared",
+      dismiss: "Remove",
       status_line_idle: "No conversion running",
       status_line_active: "{n} conversion(s) running, {pct} %",
     },
@@ -445,6 +451,8 @@
     }
     if (["queued", "fetching", "converting"].includes(job.status)) {
       bodyParts[2].append(el("button", { class: "btn ghost small", type: "button", text: t("cancel"), onclick: () => cancelJob(job.id) }));
+    } else {
+      bodyParts[2].append(el("button", { class: "dismiss", type: "button", text: `✕ ${t("dismiss")}`, "aria-label": t("dismiss"), onclick: () => cancelJob(job.id) }));
     }
     return el("li", { class: `item${job.expired ? " expired" : ""}`, "data-id": job.id }, [thumb(job.thumbnail, isBook ? "📚" : "🎧"), el("div", { class: "item-body" }, bodyParts)]);
   }
@@ -481,6 +489,7 @@
     const jobsList = $("#jobs");
     jobsList.replaceChildren(...visibleJobs.map(jobCard));
     $("#jobs-empty").classList.toggle("hidden", visibleJobs.length > 0);
+    $("#clear-history").classList.toggle("hidden", !visibleJobs.some((j) => !["queued", "fetching", "converting"].includes(j.status)));
     const activeJobs = data.jobs.filter((j) => ["queued", "fetching", "converting"].includes(j.status));
     $("#queue-count").textContent = activeJobs.length ? String(activeJobs.length) : "";
     const converting = activeJobs.find((j) => j.status === "converting");
@@ -551,6 +560,14 @@
     catch (err) { if (err.network) toast(t("err_network"), "error"); }
   }
 
+  async function clearHistory() {
+    try {
+      const { ok } = await api("/api/jobs/clear", { method: "POST" });
+      if (ok) toast(t("history_cleared"), "ok");
+      refresh();
+    } catch (err) { if (err.network) toast(t("err_network"), "error"); }
+  }
+
   async function deleteFile(file) {
     if (!window.confirm(t("confirm_delete", { name: file.title }))) return;
     try { await api(`/api/files/${encodeURIComponent(file.name)}`, { method: "DELETE" }); refresh(); }
@@ -607,6 +624,7 @@
     store.set("bookmallow.lang", state.lang);
     applyI18n();
   });
+  $("#clear-history").addEventListener("click", clearHistory);
   $("#pl-cancel").addEventListener("click", closePlaylist);
   $("#pl-single").addEventListener("click", () => submit({ playlist: "ignore" }));
   $("#pl-add").addEventListener("click", () => submit({ playlist: "expand", video_ids: selectedPlaylistIds() }));

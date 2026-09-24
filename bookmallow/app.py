@@ -286,9 +286,15 @@ def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, s
     @app.delete("/api/jobs/<job_id>")
     @login_required
     def api_cancel(job_id: str):
-        if not q.cancel(job_id):
-            return jsonify(error="not_found"), 404
-        return "", 204
+        """Cancel an active job, or forget a finished one."""
+        if q.cancel(job_id) or q.remove(job_id):
+            return "", 204
+        return jsonify(error="not_found"), 404
+
+    @app.post("/api/jobs/clear")
+    @login_required
+    def api_clear_history():
+        return jsonify(removed=q.clear_history())
 
     @app.get("/api/files/<path:name>")
     @login_required

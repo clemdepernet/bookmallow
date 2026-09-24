@@ -562,3 +562,29 @@ def test_youtube_flow_unchanged_with_book_fakes(bq):
     job = bq.submit(URL, "aaaaaaaaaaa", "64")
     bq.process_next(block=False)
     assert bq.get(job.id).status is Status.DONE and bq.get(job.id).kind == "youtube"
+
+
+def test_remove_forgets_finished_jobs_only(q):
+    job = q.submit(URL, "aaaaaaaaaaa", "64")
+    assert q.remove(job.id) is False  # still queued
+    q.cancel(job.id)
+    assert q.remove(job.id) is True and q.get(job.id) is None
+    assert q.remove("nope") is False
+    assert StateStore(q.config.state_path).load() == []
+
+
+def test_clear_history_keeps_active_and_library_backed_done_jobs(q, config):
+    done_kept = q.submit(URL, "aaaaaaaaaaa", "64")
+    q.process_next(block=False)  # done, file on disk
+    failed = q.submit(URL[:-11] + "b" * 11, "b" * 11, "64")
+    q._fetch_video = lambda url: (_ for _ in ()).throw(MetadataError("private", "x"))
+    q.process_next(block=False)  # failed
+    q._fetch_video = meta_for
+    gone = q.submit(URL[:-11] + "c" * 11, "c" * 11, "64")
+    q.process_next(block=False)
+    (config.data_dir / q.get(gone.id).filename).unlink()  # done but file vanished
+    active = q.submit(URL[:-11] + "d" * 11, "d" * 11, "64")
+    assert q.clear_history() == 2
+    ids = {j.id for j in q.jobs}
+    assert ids == {done_kept.id, active.id}
+    assert q.clear_history() == 0

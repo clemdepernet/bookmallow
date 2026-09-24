@@ -21,7 +21,7 @@ def test_index_has_hooks_and_static_assets(config):
     c = client(config)
     html = c.get("/").get_data(as_text=True)
     for hook in ('id="submit-form"', 'id="url"', 'id="qualities"', 'id="banner"', 'id="jobs"', 'id="files"',
-                 'id="playlist-dialog"', 'id="lang-toggle"', 'data-default-quality="64"', 'data-max-files="6"',
+                 'id="playlist-dialog"', 'id="lang-toggle"', 'id="clear-history"', 'data-default-quality="64"', 'data-max-files="6"',
                  'id="tab-convert"', 'id="tab-store"', 'id="panel-convert"', 'id="panel-store"',
                  'id="store-form"', 'id="store-q"', 'id="store-langs"', 'id="store-results"',
                  'data-store-enabled="1"'):
@@ -58,7 +58,7 @@ def test_no_external_resources():
 
 def test_palette_tokens_present():
     css = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
-    for color in ("#FAF3EE", "#3B2430", "#7A2E45", "#E8A6B8", "#C9A45C", "#2F6B4F", "#A8323E"):
+    for color in ("#FFF7F9", "#F8C8D8", "#D9497D", "#C9B6F2", "#BDEBD5", "#F49A8B", "#4A2A3C"):
         assert color.lower() in css.lower()
 
 

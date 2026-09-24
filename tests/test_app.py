@@ -190,6 +190,7 @@ def test_cancel_job(client):
     job = client.post("/api/jobs", json={"url": WATCH}).get_json()["jobs"][0]
     assert client.delete(f"/api/jobs/{job['id']}").status_code == 204
     assert client.queue.get(job["id"]).status is Status.CANCELLED
+    assert client.delete(f"/api/jobs/{job['id']}").status_code == 204  # second delete forgets the finished job
     assert client.delete(f"/api/jobs/{job['id']}").status_code == 404
 
 
@@ -426,3 +427,21 @@ def test_store_submit_prowlarr_needs_torrent_config(config):
 def test_csp_allows_archive_and_librivox_covers(client):
     csp = client.get("/").headers["Content-Security-Policy"]
     assert "https://*.archive.org" in csp and "https://*.librivox.org" in csp and "https://*.ytimg.com" in csp
+
+
+def test_delete_finished_job_forgets_it_and_clear_history(client):
+    job = client.post("/api/jobs", json={"url": WATCH}).get_json()["jobs"][0]
+    client.delete(f"/api/jobs/{job['id']}")  # cancel (active → cancelled)
+    assert client.queue.get(job["id"]).status is Status.CANCELLED
+    assert client.delete(f"/api/jobs/{job['id']}").status_code == 204  # now forgets it
+    assert client.queue.get(job["id"]) is None
+    assert client.delete(f"/api/jobs/{job['id']}").status_code == 404
+    other = client.post("/api/jobs", json={"url": WATCH}).get_json()["jobs"][0]
+    client.delete(f"/api/jobs/{other['id']}")
+    r = client.post("/api/jobs/clear")
+    assert r.status_code == 200 and r.get_json() == {"removed": 1}
+    assert client.get("/api/state").get_json()["jobs"] == []
+
+
+def test_clear_history_requires_login(auth_client):
+    assert auth_client.post("/api/jobs/clear").status_code == 401

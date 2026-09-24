@@ -1,3 +1,8 @@
+## 1.3.0 — 2026-09-25
+
+- Queue history can be cleaned: "Clear history" forgets failed, cancelled and expired jobs (library-backed books stay), and each finished card has a "Remove" button. `POST /api/jobs/clear`; `DELETE /api/jobs/<id>` now also forgets a finished job.
+- Back to the pastel identity (pink, lilac, mint) and the marshmallow-with-headphones mascot, slightly quieter: deeper accent, softer shadows, calmer background. The audiobook-companion positioning, tab order and copy from 1.2.0 stay.
+
 ## 1.2.0 — 2026-09-25
 
 - New identity: Bookmallow is an audiobook companion. "Find a book" is now the home tab; YouTube becomes "Import from YouTube".
