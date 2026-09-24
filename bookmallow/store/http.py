@@ -29,7 +29,8 @@ def _open(url: str, timeout: float, headers: Mapping[str, str] | None):
     try:
         return urllib.request.urlopen(req, timeout=timeout)
     except urllib.error.HTTPError as exc:
-        raise StoreError("provider_error", f"{_host(url)}: HTTP {exc.code}") from exc
+        exc.close()
+        raise StoreError("provider_error", f"{_host(url)}: HTTP {exc.code}", status=exc.code) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         reason = getattr(exc, "reason", None) or exc
         raise StoreError("provider_error", f"{_host(url)}: {reason}") from exc

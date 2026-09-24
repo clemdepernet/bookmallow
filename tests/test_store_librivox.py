@@ -20,16 +20,25 @@ BOOK = {
 BOOK_EN = {**BOOK, "id": "1", "title": "Ball of Fat", "language": "English", "sections": []}
 
 
+def not_found():
+    """What `get_json` raises for the real API's no-match answer: HTTP 404 {"error": "Audiobooks could not be found"}."""
+    return StoreError("provider_error", "librivox.org: HTTP 404", status=404)
+
+
 def fetcher(mapping):
-    """mapping: param name → payload; the fetcher picks by whichever of title/author/id is present."""
+    """mapping: param name → payload (or exception to raise); picks by whichever of title/author/id is present.
+    A missing key behaves like the real API: HTTP 404."""
     calls = []
 
     def fetch(url, params=None, timeout=20.0, headers=None):
         calls.append(dict(params or {}))
         for key in ("id", "title", "author"):
             if key in (params or {}):
-                return mapping.get(key, {"error": "Audiobooks could not be found"})
-        return {"error": "Audiobooks could not be found"}
+                answer = mapping.get(key, not_found())
+                if isinstance(answer, Exception):
+                    raise answer
+                return answer
+        raise not_found()
 
     fetch.calls = calls
     return fetch
@@ -58,6 +67,37 @@ def test_search_propagates_store_error():
         raise StoreError("provider_error", "down")
     with pytest.raises(StoreError):
         lv.search("x", "all", fetch=boom)
+
+
+def test_search_author_404_keeps_title_results():
+    fetch = fetcher({"title": {"books": [BOOK]}, "author": not_found()})
+    assert [r.source_id for r in lv.search("boule", "fr", fetch=fetch)] == ["904"]
+    assert len(fetch.calls) == 2
+
+
+def test_search_title_404_keeps_author_results():
+    fetch = fetcher({"author": {"books": [BOOK]}})
+    assert [r.source_id for r in lv.search("maupassant", "fr", fetch=fetch)] == ["904"]
+
+
+def test_search_both_404_is_empty():
+    assert lv.search("zzzzqqq", "all", fetch=fetcher({})) == []
+
+
+def test_search_503_still_fails():
+    fetch = fetcher({"title": {"books": [BOOK]}, "author": StoreError("provider_error", "librivox.org: HTTP 503", status=503)})
+    with pytest.raises(StoreError) as exc:
+        lv.search("boule", "fr", fetch=fetch)
+    assert exc.value.code == "provider_error" and exc.value.status == 503
+
+
+def test_plan_404_is_not_found_and_503_is_provider_error():
+    with pytest.raises(StoreError) as exc:
+        lv.plan("99999999", fetch=fetcher({"id": not_found()}))
+    assert exc.value.code == "not_found"
+    with pytest.raises(StoreError) as exc:
+        lv.plan("1", fetch=fetcher({"id": StoreError("provider_error", "HTTP 503", status=503)}))
+    assert exc.value.code == "provider_error"
 
 
 def test_plan_orders_sections_and_reads_durations():

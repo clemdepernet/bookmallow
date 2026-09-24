@@ -20,10 +20,13 @@ _RUNTIME = re.compile(r"^\s*(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)\s*$")
 
 
 class StoreError(Exception):
-    def __init__(self, code: str, detail: str = ""):
+    """`status` carries the upstream HTTP status when the error came from an HTTP answer (e.g. 404), else None."""
+
+    def __init__(self, code: str, detail: str = "", status: int | None = None):
         super().__init__(detail or code)
         self.code = code
         self.detail = detail
+        self.status = status
 
 
 @dataclass

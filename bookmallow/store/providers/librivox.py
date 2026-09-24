@@ -8,7 +8,6 @@ from ..http import get_json
 from ..models import BookPlan, SearchResult, StoreError, Track, lang_code
 
 API = "https://librivox.org/api/feed/audiobooks"
-LANG_NAMES = {"fr": "French", "en": "English"}
 _IA = re.compile(r"archive\.org/details/([^/?#]+)")
 Fetch = Callable[..., object]
 
@@ -64,11 +63,22 @@ def _books(payload) -> list[dict]:
     return []  # {"error": "Audiobooks could not be found"} or anything unexpected
 
 
+def _fetch_books(fetch: Fetch, params: dict, timeout: float) -> list[dict]:
+    """The API answers HTTP 404 {"error": "Audiobooks could not be found"} when nothing matches: that is no result."""
+    try:
+        return _books(fetch(API, params, timeout=timeout))
+    except StoreError as exc:
+        if exc.status == 404:
+            return []
+        raise
+
+
 def search(q: str, lang: str, fetch: Fetch = get_json, timeout: float = 20.0, limit: int = 25) -> list[SearchResult]:
     common = {"format": "json", "extended": "1", "coverart": "1", "limit": str(limit)}
     seen: dict[str, SearchResult] = {}
+    # Both queries are always issued (title prefix, then author): one of them usually has no hit (404).
     for params in ({"title": f"^{q}"}, {"author": q}):
-        for book in _books(fetch(API, {**params, **common}, timeout=timeout)):
+        for book in _fetch_books(fetch, {**params, **common}, timeout):
             result = _result(book)
             if lang != "all" and result.language != lang:
                 continue
@@ -77,7 +87,7 @@ def search(q: str, lang: str, fetch: Fetch = get_json, timeout: float = 20.0, li
 
 
 def plan(book_id: str, fetch: Fetch = get_json, timeout: float = 20.0) -> BookPlan:
-    books = _books(fetch(API, {"id": str(book_id), "format": "json", "extended": "1", "coverart": "1"}, timeout=timeout))
+    books = _fetch_books(fetch, {"id": str(book_id), "format": "json", "extended": "1", "coverart": "1"}, timeout)
     if not books:
         raise StoreError("not_found", f"LibriVox book {book_id} not found")
     book = books[0]

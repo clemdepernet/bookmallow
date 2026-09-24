@@ -52,6 +52,17 @@ def test_get_json_errors_become_store_error(monkeypatch, boom):
     with pytest.raises(StoreError) as exc:
         http.get_json("https://a/b")
     assert exc.value.code == "provider_error" and "a" in exc.value.detail
+    assert exc.value.status == (503 if isinstance(boom, urllib.error.HTTPError) else None)
+
+
+def test_get_json_404_keeps_status(monkeypatch):
+    def fake_urlopen(req, timeout):
+        raise urllib.error.HTTPError("https://librivox.org/api", 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(http.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(StoreError) as exc:
+        http.get_json("https://librivox.org/api")
+    assert exc.value.code == "provider_error" and exc.value.status == 404 and "HTTP 404" in exc.value.detail
 
 
 def test_get_json_unreadable(monkeypatch):
