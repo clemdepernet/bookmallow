@@ -3741,16 +3741,16 @@ docker build --target runtime -t bookmallow:dev . 2>&1 | tail -5 && docker image
 - [ ] **Step 5 : Test de bout en bout avec une vraie vidéo courte**
 
 ```bash
-mkdir -p /tmp/-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data
+mkdir -p $SCRATCH/bm-data
 docker run -d --rm --name bm-e2e -p 7843:5000 -e MAX_FILES=2 -e TZ=Asia/Kuala_Lumpur \
-  -v /tmp/-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data:/data bookmallow:dev
+  -v $SCRATCH/bm-data:/data bookmallow:dev
 sleep 6 && docker logs bm-e2e | tail -5
 curl -s -X POST http://127.0.0.1:7843/api/jobs -H 'Content-Type: application/json' \
   -d '{"url":"https://www.youtube.com/watch?v=jNQXAC9IVRw","quality":"64"}'
 ```
 Attendu : `201` avec un job `queued`. Puis, pendant 30 s :
 ```bash
-for i in $(seq 1 15); do curl -s http://127.0.0.1:7843/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); j=d["jobs"][-1]; print(j["status"], j["progress"], j.get("error_code"), j.get("filename"))'; ls /tmp/-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data; sleep 2; done
+for i in $(seq 1 15); do curl -s http://127.0.0.1:7843/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); j=d["jobs"][-1]; print(j["status"], j["progress"], j.get("error_code"), j.get("filename"))'; ls $SCRATCH/bm-data; sleep 2; done
 ```
 Vérifications :
 - pendant la conversion, seul un fichier `*.part.mp3` apparaît dans le volume (jamais de `.webm`/`.m4a`) ;
