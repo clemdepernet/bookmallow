@@ -22,10 +22,10 @@ PLAYLIST_PREVIEW_LIMIT = 200
 
 
 def resolve_file(data_dir: Path, name: str) -> str | None:
-    """Return `name` only if it is exactly the name of a finished MP3 sitting in data_dir."""
+    """Return `name` only if it is exactly the name of a finished MP3/M4B sitting in data_dir."""
     if not name or "/" in name or "\\" in name or name.startswith("."):
         return None
-    if not name.endswith(".mp3") or name.endswith(retention.PART_SUFFIX):
+    if not name.lower().endswith(retention.AUDIO_SUFFIXES) or retention.is_partial(name):
         return None
     return name if name in os.listdir(data_dir) else None
 
@@ -36,7 +36,7 @@ def _iso(ts: float) -> str:
 
 def build_state(config: Config, q: JobQueue) -> dict:
     jobs = q.snapshot()
-    files = retention.list_mp3(config.data_dir)
+    files = retention.list_audio(config.data_dir)
     existing = {p.name for p in files}
     by_name: dict[str, dict] = {}
     for job in jobs:
@@ -64,6 +64,9 @@ def build_state(config: Config, q: JobQueue) -> dict:
             "duration": job["duration"] if job else None,
             "quality": job["quality"] if job else None,
             "job_id": job["id"] if job else None,
+            "kind": "book" if (job and job.get("kind") == "book") or path.suffix.lower() == ".m4b" else "youtube",
+            "author": job.get("author") if job else None,
+            "language": job.get("language") if job else None,
         })
     return {
         "jobs": jobs,
@@ -229,7 +232,8 @@ def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, s
         real = resolve_file(config.data_dir, name)
         if real is None:
             return jsonify(error="not_found"), 404
-        return send_from_directory(config.data_dir, real, as_attachment=True, conditional=True, max_age=0)
+        mimetype = "audio/mp4" if real.lower().endswith(".m4b") else None
+        return send_from_directory(config.data_dir, real, as_attachment=True, conditional=True, max_age=0, mimetype=mimetype)
 
     @app.delete("/api/files/<path:name>")
     @login_required

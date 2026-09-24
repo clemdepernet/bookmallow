@@ -42,6 +42,13 @@ class Job:
     created_at: str = field(default_factory=now_iso)
     started_at: str | None = None
     finished_at: str | None = None
+    kind: str = "youtube"
+    source: str | None = None
+    source_id: str | None = None
+    author: str | None = None
+    language: str | None = None
+    torrent_hash: str | None = None
+    cover: str | None = None
 
     @property
     def is_active(self) -> bool:
@@ -62,3 +69,11 @@ class Job:
 
 def new_job(url: str, video_id: str, quality: str) -> Job:
     return Job(id=uuid.uuid4().hex[:8], url=url, video_id=video_id, quality=quality)
+
+
+def new_book_job(source: str, source_id: str, title: str, author: str | None, language: str | None,
+                 duration: int | None, cover: str | None, quality: str) -> Job:
+    """A store acquisition job; `video_id` doubles as the de-duplication key `<source>:<source_id>`."""
+    return Job(id=uuid.uuid4().hex[:8], url="", video_id=f"{source}:{source_id}", quality=quality, kind="book",
+               source=source, source_id=source_id, title=title, author=author, language=language,
+               duration=duration, cover=cover, thumbnail=cover)

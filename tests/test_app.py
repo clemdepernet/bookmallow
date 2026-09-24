@@ -305,3 +305,26 @@ def test_playlist_preview_passes_limit_to_yt_dlp(config):
     c = make_client(config, fetch_playlist=spy)
     c.post("/api/jobs", json={"url": "https://www.youtube.com/playlist?list=PL1"})
     assert calls == [200]
+
+
+def test_download_and_resolve_m4b(client, config):
+    (config.data_dir / "Livre [Auteur].m4b").write_bytes(b"m4b-bytes")
+    (config.data_dir / "wip.part.m4b").write_bytes(b"w")
+    assert resolve_file(config.data_dir, "Livre [Auteur].m4b") == "Livre [Auteur].m4b"
+    assert resolve_file(config.data_dir, "wip.part.m4b") is None
+    r = client.get("/api/files/Livre%20%5BAuteur%5D.m4b")
+    assert r.status_code == 200 and r.mimetype == "audio/mp4" and r.data == b"m4b-bytes"
+    r.close()
+    d = client.get("/api/state").get_json()
+    f = next(x for x in d["files"] if x["name"] == "Livre [Auteur].m4b")
+    assert f["kind"] == "book" and f["author"] is None and f["language"] is None
+
+
+def test_state_files_carry_book_fields_from_job(client, config):
+    from bookmallow.jobs import new_book_job
+    job = new_book_job("librivox", "904", "Boule de suif", "Guy de Maupassant", "fr", 15251, None, "64")
+    job.status, job.filename = Status.DONE, "Boule de suif [Guy de Maupassant].m4b"
+    client.queue.jobs.append(job)
+    (config.data_dir / job.filename).write_bytes(b"x")
+    f = client.get("/api/state").get_json()["files"][0]
+    assert (f["kind"], f["author"], f["language"], f["title"]) == ("book", "Guy de Maupassant", "fr", "Boule de suif")

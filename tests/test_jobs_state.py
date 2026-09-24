@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from bookmallow.jobs import ACTIVE_STATUSES, Job, Status, new_job, now_iso
+from bookmallow.jobs import ACTIVE_STATUSES, Job, Status, new_book_job, new_job, now_iso
 from bookmallow.state import StateStore
 
 
@@ -82,3 +82,23 @@ def test_store_skips_unreadable_rows_but_keeps_the_rest(tmp_path):
     path.write_text(json.dumps({"version": 1, "jobs": rows}))
     assert StateStore(path).load() == [good]
     assert path.exists() and not (tmp_path / "state.json.bad").exists()
+
+
+def test_job_defaults_keep_v1_shape():
+    j = new_job("u", "v", "64")
+    assert j.kind == "youtube" and j.source is None and j.author is None and j.torrent_hash is None and j.cover is None
+
+
+def test_v1_state_dict_without_new_fields_still_loads():
+    old = {"id": "abcd1234", "url": "u", "video_id": "v", "quality": "64", "status": "done", "title": "T"}
+    j = Job.from_dict(old)
+    assert j.kind == "youtube" and j.language is None
+
+
+def test_new_book_job():
+    j = new_book_job("librivox", "904", "Boule de suif", "Guy de Maupassant", "fr", 15251, "https://c/x.jpg", "64")
+    assert j.kind == "book" and j.source == "librivox" and j.source_id == "904"
+    assert j.video_id == "librivox:904" and j.url == "" and j.title == "Boule de suif"
+    assert j.author == "Guy de Maupassant" and j.language == "fr" and j.duration == 15251
+    assert j.cover == "https://c/x.jpg" and j.thumbnail == "https://c/x.jpg" and j.quality == "64"
+    assert j.to_dict()["kind"] == "book"

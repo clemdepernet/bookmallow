@@ -14,7 +14,7 @@ from typing import Callable
 
 from .config import QUALITIES
 from .metadata import classify_error, last_line
-from .retention import PART_SUFFIX
+from .retention import part_path
 
 YTDLP_FORMAT = "bestaudio[ext=webm]/bestaudio[acodec^=opus]/bestaudio/best"
 _ESCAPE = re.compile(r"([=;#\\\n])")
@@ -44,9 +44,7 @@ class ConvertRequest:
 
     @property
     def part_path(self) -> Path:
-        name = self.out_path.name
-        stem = name[:-4] if name.endswith(".mp3") else name
-        return self.out_path.with_name(stem + PART_SUFFIX)
+        return part_path(self.out_path)
 
 
 def ytdlp_command(url: str) -> list[str]:

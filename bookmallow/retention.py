@@ -1,21 +1,32 @@
-"""Keep only the newest MAX_FILES MP3s (spec §6.5) and clean up partial files (spec §6.8)."""
+"""Keep only the newest MAX_FILES audio files (spec §6.5) and clean up partial files (spec §6.8)."""
 from __future__ import annotations
 
 import stat as _stat
 from pathlib import Path
 
-PART_SUFFIX = ".part.mp3"
+AUDIO_SUFFIXES = (".mp3", ".m4b")
+PART_MARK = ".part."
+PART_SUFFIX = ".part.mp3"  # historical name, still used by converter tests
 
 
 def stat_is_regular(st) -> bool:
     return _stat.S_ISREG(st.st_mode)
 
 
-def list_mp3(directory: Path) -> list[Path]:
-    """Finished MP3 files, newest first. Partial files are not MP3s yet; files that vanish mid-listing are skipped."""
+def is_partial(name: str) -> bool:
+    return PART_MARK in name
+
+
+def part_path(out_path: Path) -> Path:
+    """`Title.m4b` → `Title.part.m4b`: the file being written, ignored by retention."""
+    return out_path.with_name(out_path.stem + ".part" + out_path.suffix)
+
+
+def list_audio(directory: Path) -> list[Path]:
+    """Finished MP3/M4B files, newest first. Partial files are skipped, as are files that vanish mid-listing."""
     entries: list[tuple[float, str, Path]] = []
-    for path in Path(directory).glob("*.mp3"):
-        if path.name.endswith(PART_SUFFIX):
+    for path in Path(directory).iterdir():
+        if path.suffix.lower() not in AUDIO_SUFFIXES or is_partial(path.name):
             continue
         try:
             st = path.stat()
@@ -26,6 +37,9 @@ def list_mp3(directory: Path) -> list[Path]:
         entries.append((st.st_mtime, path.name, path))
     entries.sort(reverse=True)
     return [path for _, _, path in entries]
+
+
+list_mp3 = list_audio
 
 
 def prune(directory: Path, max_files: int) -> list[Path]:

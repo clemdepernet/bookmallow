@@ -76,3 +76,27 @@ def test_list_mp3_skips_files_that_vanish_during_listing(tmp_path, monkeypatch):
     monkeypatch.setattr(retention.Path, "stat", flaky_stat)
     assert [p.name for p in retention.list_mp3(tmp_path)] == ["keep.mp3"]
     assert retention.next_to_go(tmp_path, 1) == "keep.mp3"
+
+
+def test_list_audio_mixes_mp3_and_m4b_and_skips_partials(tmp_path):
+    make(tmp_path, "a.mp3", 30)
+    make(tmp_path, "b.m4b", 10)
+    make(tmp_path, "c.part.m4b", 0)
+    make(tmp_path, "d.part.mp3", 0)
+    make(tmp_path, "e.m4a", 0)
+    assert [p.name for p in retention.list_audio(tmp_path)] == ["b.m4b", "a.mp3"]
+    assert retention.list_mp3 is retention.list_audio
+
+
+def test_part_path_and_is_partial(tmp_path):
+    assert retention.part_path(tmp_path / "Livre [x].m4b") == tmp_path / "Livre [x].part.m4b"
+    assert retention.part_path(tmp_path / "Titre [id].mp3").name == "Titre [id].part.mp3"
+    assert retention.is_partial("x.part.m4b") and retention.is_partial("x.part.mp3") and not retention.is_partial("x.mp3")
+
+
+def test_prune_counts_both_kinds(tmp_path):
+    make(tmp_path, "old.mp3", 300)
+    make(tmp_path, "mid.m4b", 200)
+    make(tmp_path, "new.mp3", 100)
+    deleted = retention.prune(tmp_path, 2)
+    assert [p.name for p in deleted] == ["old.mp3"]
