@@ -3741,16 +3741,16 @@ docker build --target runtime -t bookmallow:dev . 2>&1 | tail -5 && docker image
 - [ ] **Step 5 : Test de bout en bout avec une vraie vidéo courte**
 
 ```bash
-mkdir -p /tmp/claude-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data
+mkdir -p /tmp/-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data
 docker run -d --rm --name bm-e2e -p 7843:5000 -e MAX_FILES=2 -e TZ=Asia/Kuala_Lumpur \
-  -v /tmp/claude-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data:/data bookmallow:dev
+  -v /tmp/-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data:/data bookmallow:dev
 sleep 6 && docker logs bm-e2e | tail -5
 curl -s -X POST http://127.0.0.1:7843/api/jobs -H 'Content-Type: application/json' \
   -d '{"url":"https://www.youtube.com/watch?v=jNQXAC9IVRw","quality":"64"}'
 ```
 Attendu : `201` avec un job `queued`. Puis, pendant 30 s :
 ```bash
-for i in $(seq 1 15); do curl -s http://127.0.0.1:7843/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); j=d["jobs"][-1]; print(j["status"], j["progress"], j.get("error_code"), j.get("filename"))'; ls /tmp/claude-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data; sleep 2; done
+for i in $(seq 1 15); do curl -s http://127.0.0.1:7843/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); j=d["jobs"][-1]; print(j["status"], j["progress"], j.get("error_code"), j.get("filename"))'; ls /tmp/-1000/-home-clem/49320cfb-b705-4e13-b752-f661e0a3635d/scratchpad/bm-data; sleep 2; done
 ```
 Vérifications :
 - pendant la conversion, seul un fichier `*.part.mp3` apparaît dans le volume (jamais de `.webm`/`.m4a`) ;
@@ -4160,7 +4160,7 @@ Dans `/home/clem/stacks.sh`, ajouter `"$HOME/bookmallow-stack"` au tableau `STAC
 - [ ] **Step 6 : Vérification finale et mémoire**
 
 - Ouvrir `http://<ip-du-pi>:7843`, se connecter avec le mot de passe, convertir une vidéo courte de bout en bout depuis l'interface, la télécharger, la supprimer.
-- Écrire la mémoire projet (`/home/clem/.claude/projects/-home-clem/memory/`) : Bookmallow vit dans `~/bookmallow` (code) et `~/bookmallow-stack` (déploiement, port 7843), package ghcr à passer public, post Reddit dans `docs/reddit-post.md`.
+- Écrire la mémoire projet (`/home/clem/./projects/-home-clem/memory/`) : Bookmallow vit dans `~/bookmallow` (code) et `~/bookmallow-stack` (déploiement, port 7843), package ghcr à passer public, post Reddit dans `docs/reddit-post.md`.
 
 ---
 
