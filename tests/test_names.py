@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from bookmallow.names import safe_filename, unique_name
+from bookmallow.names import safe_filename, safe_tag, unique_name
 
 VID = "dQw4w9WgXcQ"
 
@@ -47,3 +47,10 @@ def test_max_len_smaller_than_suffix_raises():
     with pytest.raises(ValueError):
         safe_filename("Title", VID, max_len=10)
     assert len(safe_filename("Title", VID, max_len=20)) <= 20
+
+
+def test_safe_tag():
+    assert safe_tag("Guy de Maupassant", "x") == "Guy de Maupassant"
+    assert safe_tag('A/B:C*"D', "x") == "ABCD"
+    assert safe_tag("   ", "fallback") == "fallback" and safe_tag(None, "f") == "f"
+    assert len(safe_tag("a" * 100, "x")) == 40

@@ -26,6 +26,12 @@ def safe_filename(title: str | None, video_id: str, ext: str = ".mp3", max_len: 
     return f"{base}{suffix}"
 
 
+def safe_tag(text: str | None, fallback: str, max_len: int = 40) -> str:
+    """Short bracket tag for file names (author, id): forbidden characters removed, truncated, `fallback` if empty."""
+    cleaned = _SPACES.sub(" ", _FORBIDDEN.sub("", unicodedata.normalize("NFC", text or ""))).strip(" .")
+    return cleaned[:max_len].rstrip(" .") or fallback
+
+
 def unique_name(name: str, existing: Iterable[str]) -> str:
     """Append ` (2)`, ` (3)`… before the extension until the name is free."""
     taken = set(existing)

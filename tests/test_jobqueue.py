@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import shutil
 from collections import namedtuple
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,8 @@ from bookmallow.converter import Cancelled, ConversionError
 from bookmallow.jobs import Status, new_job
 from bookmallow.metadata import MetadataError, VideoMeta
 from bookmallow.state import StateStore
+from bookmallow.store.models import BookPlan, SearchResult, StoreError, Track
+from bookmallow.store.qbittorrent import TorrentInfo
 
 Usage = namedtuple("Usage", "total used free")
 URL = "https://www.youtube.com/watch?v=aaaaaaaaaaa"
@@ -272,3 +276,221 @@ def test_start_runs_worker_thread(q, config):
     while q.get(job.id).status is not Status.DONE and time.monotonic() < deadline:
         time.sleep(0.02)
     assert q.get(job.id).status is Status.DONE
+
+
+LIBRI = SearchResult("librivox", "904", "Boule de suif", author="Guy de Maupassant", language="fr", duration=1000,
+                     cover="https://c/x.jpg", url="https://librivox.org/x")
+TORR = SearchResult("prowlarr", "abc", "Dune", author="Idx", language="en", size_bytes=5000, download="magnet:?xt=1", url="https://idx/t")
+PLAN = BookPlan("Boule de suif", "Guy de Maupassant", "fr", 1000, "https://c/x.jpg", [Track("https://a/1.mp3", 500.0, "Un"), Track("https://a/2.mp3", 500.0, "Deux")])
+
+
+class FakeAssembly:
+    instances: list["FakeAssembly"] = []
+    behaviour = "ok"
+
+    def __init__(self, req, on_progress=None):
+        self.req, self.on_progress, self.cancelled = req, on_progress or (lambda p: None), False
+        FakeAssembly.instances.append(self)
+
+    def run(self):
+        self.on_progress(50.0)
+        if FakeAssembly.behaviour == "fail":
+            raise ConversionError("ffmpeg", "boom", tail="l1\nl2")
+        if self.cancelled:
+            raise Cancelled()
+        self.req.out_path.write_bytes(b"m4b" * 100)
+
+    def cancel(self):
+        self.cancelled = True
+
+
+class FakeTorrent:
+    instances: list["FakeTorrent"] = []
+    behaviour = "ok"  # ok | single | stall | cancel_in_wait
+    single_path: Path | None = None
+
+    def __init__(self, client, result, config, job_id, on_progress=None, **kw):
+        self.client, self.result, self.config, self.job_id = client, result, config, job_id
+        self.on_progress = on_progress or (lambda p: None)
+        self.hash, self.cleaned, self.cancelled = None, False, False
+        self.copy_audio, self.single_file = True, None
+        FakeTorrent.instances.append(self)
+
+    def start(self):
+        self.hash = "h1"
+        return "h1"
+
+    def wait(self):
+        self.on_progress(25.0)
+        if FakeTorrent.behaviour == "stall":
+            from bookmallow.store.qbittorrent import QbtError
+            raise QbtError("torrent_stalled", "no data")
+        if FakeTorrent.behaviour == "cancel_in_wait" or self.cancelled:
+            raise Cancelled()
+        return TorrentInfo("h1", "Dune", 1.0, "uploading", "/downloads/bookmallow/Dune", 5000, 5000)
+
+    def plan(self, info):
+        if FakeTorrent.behaviour == "single":
+            self.single_file = FakeTorrent.single_path
+        return BookPlan("Dune", "Idx", "en", 3600, None, [Track("/incoming/bookmallow/Dune/01.m4a", 3600.0, "01")])
+
+    def cleanup(self):
+        self.cleaned = True
+
+    def cancel(self):
+        self.cancelled = True
+
+
+class FakeQbt:
+    created: list["FakeQbt"] = []
+
+    def __init__(self, url, user, password, timeout=20.0):
+        self.url, self.deleted, self.logged = url, [], False
+        FakeQbt.created.append(self)
+
+    def login(self):
+        self.logged = True
+
+    def delete(self, h, delete_files=True):
+        self.deleted.append((h, delete_files))
+
+
+@pytest.fixture
+def bq(config):
+    """A queue with book fakes; torrent configured."""
+    FakeAssembly.instances, FakeTorrent.instances, FakeQbt.created = [], [], []
+    FakeAssembly.behaviour, FakeTorrent.behaviour = "ok", "ok"
+    cfg = replace(config, prowlarr_url="http://p", prowlarr_api_key="k", qbt_url="http://q")
+    queue = jq.JobQueue(cfg, StateStore(cfg.state_path), fetch_video=meta_for, conversion_factory=FakeConversion,
+                        disk_usage=lambda path: Usage(10**12, 0, 10**11), plan_for=lambda s, sid, c: PLAN,
+                        assembly_factory=FakeAssembly, torrent_factory=FakeTorrent, qbt_client_factory=FakeQbt)
+    queue.recover()
+    return queue
+
+
+def test_estimate_book_bytes():
+    assert jq.estimate_book_bytes(3600, None, "64k") == int(3600 * 64 * 1000 / 8 * 1.1)
+    assert jq.estimate_book_bytes(None, 5000, "64k") == 5500
+    assert jq.estimate_book_bytes(None, None, "64k") == 0
+
+
+def test_submit_book_dedupes_on_key(bq):
+    job = bq.submit_book(LIBRI)
+    assert job.kind == "book" and job.video_id == "librivox:904" and job.quality == "64"
+    with pytest.raises(jq.DuplicateJob):
+        bq.submit_book(LIBRI)
+
+
+def test_free_book_flow(bq):
+    job = bq.submit_book(LIBRI)
+    assert bq.process_next(block=False)
+    job = bq.get(job.id)
+    assert job.status is Status.DONE and job.filename == "Boule de suif [Guy de Maupassant].m4b" and job.progress == 100.0
+    assert (bq.config.data_dir / job.filename).exists() and job.size_bytes == 300
+    req = FakeAssembly.instances[0].req
+    assert req.work_dir == bq.config.work_dir / job.id and req.cover == "https://c/x.jpg" and req.bitrate == "64k"
+    assert req.copy_audio is False and req.source_url == "https://librivox.org/x" and len(req.tracks) == 2
+    assert FakeTorrent.instances == []
+
+
+def test_free_book_plan_error(bq):
+    bq._plan_for = lambda s, sid, c: (_ for _ in ()).throw(StoreError("not_found", "gone"))
+    job = bq.submit_book(LIBRI)
+    bq.process_next(block=False)
+    assert bq.get(job.id).status is Status.FAILED and bq.get(job.id).error_code == "not_found"
+
+
+def test_torrent_book_flow_scales_progress_and_cleans_up(bq):
+    seen = []
+    job = bq.submit_book(TORR)
+    orig = bq._progress
+    bq._progress = lambda j, p: (seen.append(p), orig(j, p))
+    bq.process_next(block=False)
+    job = bq.get(job.id)
+    assert job.status is Status.DONE and job.torrent_hash == "h1" and job.filename == "Dune [Idx].m4b"
+    assert seen == [25.0, 75.0]  # wait → 25 ; assembly 50 → 50 + 50/2
+    acq = FakeTorrent.instances[0]
+    assert acq.cleaned is True and FakeQbt.created[0].url == "http://q"
+    req = FakeAssembly.instances[0].req
+    assert req.copy_audio is True and req.cover is None and req.tracks[0].location.startswith("/incoming")
+
+
+def test_torrent_single_m4b_is_copied_not_assembled(bq, tmp_path):
+    src = tmp_path / "src.m4b"
+    src.write_bytes(b"ready")
+    FakeTorrent.behaviour, FakeTorrent.single_path = "single", src
+    job = bq.submit_book(TORR)
+    bq.process_next(block=False)
+    job = bq.get(job.id)
+    assert job.status is Status.DONE and (bq.config.data_dir / job.filename).read_bytes() == b"ready"
+    assert FakeAssembly.instances == [] and FakeTorrent.instances[0].cleaned
+
+
+def test_torrent_stall_fails_and_cleans(bq):
+    FakeTorrent.behaviour = "stall"
+    job = bq.submit_book(TORR)
+    bq.process_next(block=False)
+    assert bq.get(job.id).error_code == "torrent_stalled" and FakeTorrent.instances[0].cleaned
+
+
+def test_torrent_disabled_fails_cleanly(config):
+    queue = jq.JobQueue(config, StateStore(config.state_path), fetch_video=meta_for, conversion_factory=FakeConversion,
+                        disk_usage=lambda path: Usage(10**12, 0, 10**11), plan_for=lambda s, sid, c: PLAN,
+                        assembly_factory=FakeAssembly, torrent_factory=FakeTorrent, qbt_client_factory=FakeQbt)
+    queue.recover()
+    job = queue.submit_book(TORR)
+    queue.process_next(block=False)
+    assert queue.get(job.id).error_code == "store_disabled"
+
+
+def test_cancel_during_torrent_wait(bq):
+    job = bq.submit_book(TORR)
+
+    class CancellingTorrent(FakeTorrent):
+        def wait(self):
+            bq.cancel(job.id)
+            return super().wait()
+
+    bq._torrent_factory = CancellingTorrent
+    bq.process_next(block=False)
+    assert bq.get(job.id).status is Status.CANCELLED and FakeTorrent.instances[0].cancelled and FakeTorrent.instances[0].cleaned
+    assert not list(bq.config.data_dir.glob("*.m4b"))
+
+
+def test_book_disk_guard_uses_size(config):
+    cfg = replace(config, min_free_mb=1, prowlarr_url="http://p", prowlarr_api_key="k", qbt_url="http://q")
+    queue = jq.JobQueue(cfg, StateStore(cfg.state_path), fetch_video=meta_for, conversion_factory=FakeConversion,
+                        disk_usage=lambda path: Usage(10**9, 0, 1_500_000), plan_for=lambda s, sid, c: BookPlan("T", None, None, None, None, [Track("u")]),
+                        assembly_factory=FakeAssembly, torrent_factory=FakeTorrent, qbt_client_factory=FakeQbt)
+    queue.recover()
+    big = replace(TORR, size_bytes=900_000)  # 990 000 needed, leaves 510 000 < 1 MB
+    job = queue.submit_book(big)
+    queue.process_next(block=False)
+    assert queue.get(job.id).error_code == "no_space" and FakeTorrent.instances[-1].cleaned
+
+
+def test_recover_cleans_orphan_torrent_and_queued_prowlarr(config):
+    cfg = replace(config, prowlarr_url="http://p", prowlarr_api_key="k", qbt_url="http://q")
+    store = StateStore(cfg.state_path)
+    from bookmallow.jobs import new_book_job
+    converting = new_book_job("prowlarr", "abc", "Dune", "Idx", "en", None, None, "64")
+    converting.status, converting.torrent_hash = Status.CONVERTING, "h1"
+    queued_t = new_book_job("prowlarr", "def", "Other", None, None, None, None, "64")
+    queued_l = new_book_job("librivox", "1", "Libre", None, "fr", 10, None, "64")
+    store.save([converting, queued_t, queued_l])
+    (cfg.work_dir / "old").mkdir(parents=True)
+    FakeQbt.created = []
+    queue = jq.JobQueue(cfg, store, fetch_video=meta_for, conversion_factory=FakeConversion, disk_usage=lambda p: Usage(1, 0, 10**11),
+                        plan_for=lambda s, sid, c: PLAN, assembly_factory=FakeAssembly, torrent_factory=FakeTorrent, qbt_client_factory=FakeQbt)
+    queue.recover()
+    assert queue.get(converting.id).status is Status.FAILED and FakeQbt.created[0].deleted == [("h1", True)]
+    assert queue.get(queued_t.id).status is Status.FAILED and queue.get(queued_t.id).error_code == "interrupted"
+    assert queue.get(queued_l.id).status is Status.QUEUED and not cfg.work_dir.exists()
+    queue.process_next(block=False)
+    assert queue.get(queued_l.id).status is Status.DONE
+
+
+def test_youtube_flow_unchanged_with_book_fakes(bq):
+    job = bq.submit(URL, "aaaaaaaaaaa", "64")
+    bq.process_next(block=False)
+    assert bq.get(job.id).status is Status.DONE and bq.get(job.id).kind == "youtube"
