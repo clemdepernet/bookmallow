@@ -23,6 +23,24 @@ META = {
 }
 
 
+def candide_files():
+    """Shape of the real `candide_ou_loptimisme_b_librivox` item: the originals carry `track`, but among the
+    `_64kb` derivatives only chapters 26 and 27 do; every MP3 has a `title`; images are per-chapter waveforms,
+    spectrograms and the item tile."""
+    files = [{"name": "CandideOuLoptimisme_librivox.m4b", "source": "original"},
+             {"name": "__ia_thumb.jpg", "source": "original", "format": "Item Tile"}]
+    for n in range(1, 31):
+        stem = f"candide_{n:02d}_voltaire"
+        files += [
+            {"name": f"{stem}.mp3", "source": "original", "track": f"{n:02d}", "title": f"Chapitre {n:02d}", "length": "300.5"},
+            {"name": f"{stem}_64kb.mp3", "source": "derivative", "track": str(n) if n in (26, 27) else None,
+             "title": f"Chapitre {n:02d}", "length": "05:00"},
+            {"name": f"{stem}.png", "source": "derivative", "format": "PNG"},
+            {"name": f"{stem}_spectrogram.png", "source": "derivative", "format": "Spectrogram"},
+        ]
+    return files
+
+
 def fetcher(payload):
     calls = []
 
@@ -60,6 +78,48 @@ def test_search_lang_all_has_no_language_clause():
 def test_pick_tracks_prefers_64kb_then_original_and_sorts_by_track():
     picked = ia.pick_tracks(META["files"])
     assert [f["name"] for f in picked] == ["ss_001_maupassant_128kb.mp3", "ss_002_maupassant_64kb.mp3"]
+
+
+def test_pick_tracks_partial_track_field_uses_natural_name_order():
+    picked = ia.pick_tracks(candide_files())
+    assert len(picked) == 30 and all(f["name"].endswith("_64kb.mp3") for f in picked)
+    assert [f["name"] for f in picked[:3]] == ["candide_01_voltaire_64kb.mp3", "candide_02_voltaire_64kb.mp3",
+                                                 "candide_03_voltaire_64kb.mp3"]
+    assert picked[25]["name"] == "candide_26_voltaire_64kb.mp3" and picked[-1]["name"] == "candide_30_voltaire_64kb.mp3"
+
+
+def test_pick_tracks_full_track_field_wins_over_names_and_natural_sort():
+    files = [{"name": "b.mp3", "track": "1"}, {"name": "a.mp3", "track": "2/2"}]
+    assert [f["name"] for f in ia.pick_tracks(files)] == ["b.mp3", "a.mp3"]
+    files = [{"name": "part 10.mp3"}, {"name": "part 9.mp3"}, {"name": "part 1.mp3", "track": "3"}]
+    assert [f["name"] for f in ia.pick_tracks(files)] == ["part 1.mp3", "part 9.mp3", "part 10.mp3"]
+
+
+def test_plan_uses_file_titles_and_tile_when_no_real_cover():
+    meta = {"metadata": {"identifier": "candide_ou_loptimisme_b_librivox", "title": "Candide"}, "files": candide_files()}
+    plan = ia.plan("candide_ou_loptimisme_b_librivox", fetch=fetcher(meta))
+    assert [t.title for t in plan.tracks[:2]] == ["Chapitre 01", "Chapitre 02"] and plan.tracks[25].title == "Chapitre 26"
+    assert plan.tracks[0].duration == 300.0 and plan.duration == 30 * 300
+    assert plan.cover == "https://archive.org/services/img/candide_ou_loptimisme_b_librivox"
+
+
+def test_pick_cover_preference():
+    files = [{"name": "a_spectrogram.png", "source": "original"}, {"name": "__ia_thumb.jpg", "source": "original"},
+             {"name": "ch01.png", "source": "derivative"}, {"name": "Book_1301.jpg", "source": "original"},
+             {"name": "Book_1301_thumb.jpg", "source": "derivative"}]
+    assert ia.pick_cover("x", files) == "https://archive.org/download/x/Book_1301.jpg"
+    files.append({"name": "Front Cover.jpg", "source": "derivative"})
+    assert ia.pick_cover("x", files) == "https://archive.org/download/x/Front%20Cover.jpg"
+    assert ia.pick_cover("x", [{"name": "x_itemimage.png"}]) == "https://archive.org/download/x/x_itemimage.png"
+    assert ia.pick_cover("x", files[:3]) == "https://archive.org/services/img/x"
+
+
+@pytest.mark.parametrize("bad", ["foo?x=", "a b", "a/b", "..", ".hidden", "..%2f", "x\nhost", "", "a" * 101])
+def test_plan_rejects_bad_identifier_without_fetching(bad):
+    fetch = fetcher({})
+    with pytest.raises(StoreError) as exc:
+        ia.plan(bad, fetch=fetch)
+    assert exc.value.code == "not_found" and fetch.calls == []
 
 
 def test_plan_builds_tracks_cover_and_duration():

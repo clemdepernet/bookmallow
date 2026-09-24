@@ -16,6 +16,7 @@ _LANG_CODES = {
     "la": "la", "lat": "la", "latin": "la",
     "mul": "mul", "multilingual": "mul",
 }
+_NUM = re.compile(r"(\d+)")
 _RUNTIME = re.compile(r"^\s*(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)\s*$")
 
 
@@ -70,6 +71,11 @@ class SearchResult:
         data.pop("download")
         data["key"] = self.key
         return data
+
+
+def natural_key(text: str) -> list:
+    """Sort key where digit runs compare as numbers: 'Ch 2' < 'Ch 10'."""
+    return [int(part) if part.isdigit() else part.lower() for part in _NUM.split(str(text))]
 
 
 def lang_code(value: str | None) -> str | None:

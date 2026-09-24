@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import subprocess
 import threading
 import time
@@ -12,19 +11,14 @@ from typing import Callable
 
 from ..config import Config
 from ..converter import Cancelled
-from .models import BookPlan, SearchResult, StoreError, Track
+from .models import BookPlan, SearchResult, StoreError, Track, natural_key
 from .qbittorrent import QbtClient, QbtError, TorrentInfo
 
 log = logging.getLogger(__name__)
 AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wma"}
 FINISHED_STATES = {"uploading", "stalledUP", "queuedUP", "pausedUP", "stoppedUP", "forcedUP", "checkingUP"}
 ERROR_STATES = {"error", "missingFiles"}
-_NUM = re.compile(r"(\d+)")
 Prober = Callable[[Path], tuple[float | None, str | None]]
-
-
-def natural_key(text: str) -> list:
-    return [int(part) if part.isdigit() else part.lower() for part in _NUM.split(str(text))]
 
 
 def map_path(remote: str, path_map: tuple[str, str]) -> Path:
