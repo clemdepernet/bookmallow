@@ -12,7 +12,6 @@
 
 ## Global Constraints
 
-- Dépôt `/home/clem/bookmallow`, branche `feat/store` (créée, spec commitée). Commits en anglais, chaque message se termine par `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Rien sous `.superpowers/` n'est commité.
 - `from __future__ import annotations` en tête de chaque module ; aucune nouvelle dépendance Python (stdlib + Flask uniquement).
 - Tests : `.venv/bin/pytest -q` depuis la racine (153 tests verts au départ, `-W error::ResourceWarning` actif). Les tests n'exécutent jamais `ffmpeg`, `ffprobe`, ni aucune requête réseau : `fetch`, `transport`, `popen`, `prober`, `sleep`, `clock` sont injectés.
 - Compatibilité : `state.json` reste en version 1 ; les nouveaux champs de `Job` ont des défauts ; les 153 tests existants doivent rester verts sans modification autre que celles listées dans une tâche.
@@ -380,9 +379,7 @@ Dans `api_download` :
 
 ```bash
 git add bookmallow/config.py bookmallow/jobs.py bookmallow/retention.py bookmallow/converter.py bookmallow/app.py tests/test_config.py tests/test_jobs_state.py tests/test_retention.py tests/test_app.py
-git commit -m "feat(store): config, book job fields, shared MP3/M4B retention and M4B downloads
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): config, book job fields, shared MP3/M4B retention and M4B downloads"
 ```
 
 ---
@@ -706,9 +703,7 @@ def providers_available(config: Config) -> dict[str, str]:
 
 ```bash
 git add bookmallow/store tests/test_store_models.py tests/test_store_http.py
-git commit -m "feat(store): shared models, stdlib HTTP helpers and provider availability
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): shared models, stdlib HTTP helpers and provider availability"
 ```
 
 ---
@@ -921,9 +916,7 @@ def plan(book_id: str, fetch: Fetch = get_json, timeout: float = 20.0) -> BookPl
 
 ```bash
 git add bookmallow/store/providers/librivox.py tests/test_store_librivox.py
-git commit -m "feat(store): LibriVox provider (search and chapter plan)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): LibriVox provider (search and chapter plan)"
 ```
 
 ---
@@ -1161,9 +1154,7 @@ def plan(identifier: str, fetch: Fetch = get_json, timeout: float = 20.0) -> Boo
 
 ```bash
 git add bookmallow/store/providers/archive.py tests/test_store_archive.py
-git commit -m "feat(store): Internet Archive provider (search, track selection, plan)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): Internet Archive provider (search, track selection, plan)"
 ```
 
 ---
@@ -1526,9 +1517,7 @@ class QbtClient:
 
 ```bash
 git add bookmallow/store/providers/prowlarr.py bookmallow/store/qbittorrent.py tests/test_store_prowlarr.py tests/test_store_qbittorrent.py
-git commit -m "feat(store): Prowlarr provider and qBittorrent WebUI client
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): Prowlarr provider and qBittorrent WebUI client"
 ```
 
 ---
@@ -1786,9 +1775,7 @@ def resolve_result(source: str, source_id: str, config: Config, *,
 
 ```bash
 git add bookmallow/store/search.py tests/test_store_search.py
-git commit -m "feat(store): unified provider search with cache and result resolution
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): unified provider search with cache and result resolution"
 ```
 
 ---
@@ -2255,9 +2242,7 @@ class Assembly:
 
 ```bash
 git add bookmallow/procutil.py bookmallow/converter.py bookmallow/store/assemble.py tests/test_store_assemble.py
-git commit -m "feat(store): shared process helpers and M4B assembler with chapters and cover
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): shared process helpers and M4B assembler with chapters and cover"
 ```
 
 ---
@@ -2657,9 +2642,7 @@ class TorrentAcquisition:
 
 ```bash
 git add bookmallow/store/torrent.py tests/test_store_torrent.py
-git commit -m "feat(store): torrent acquisition through qBittorrent with stall detection and cleanup
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): torrent acquisition through qBittorrent with stall detection and cleanup"
 ```
 
 ---
@@ -3153,9 +3136,7 @@ plus :
 
 ```bash
 git add bookmallow/jobqueue.py bookmallow/names.py tests/test_jobqueue.py tests/test_names.py
-git commit -m "feat(store): book jobs in the queue (free and torrent flows, recovery, guards)
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): book jobs in the queue (free and torrent flows, recovery, guards)"
 ```
 
 ---
@@ -3364,9 +3345,7 @@ Routes :
 
 ```bash
 git add bookmallow/app.py tests/test_app.py
-git commit -m "feat(store): search and submit API, store state, CSP for cover hosts
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): search and submit API, store state, CSP for cover hosts"
 ```
 
 ---
@@ -3699,9 +3678,7 @@ et avant `applyI18n();` final : `setTab(state.tab);`.
 
 ```bash
 git add bookmallow/templates/index.html bookmallow/static/app.js bookmallow/static/style.css tests/test_frontend.py
-git commit -m "feat(store): store tab with unified search, result cards and book-aware queue/library
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "feat(store): store tab with unified search, result cards and book-aware queue/library"
 ```
 
 ---
@@ -3812,9 +3789,7 @@ Dans la spec v1, section « Écarts », ajouter : `- v1.1 : la bibliothèque con
 `.venv/bin/pytest -q` (verts) puis :
 ```bash
 git add bookmallow/__init__.py CHANGELOG.md README.md docker-compose.yml docs/superpowers/specs/2026-09-23-bookmallow-design.md docs/superpowers/plans/2026-09-24-bookmallow-store.md
-git commit -m "docs: v1.1.0 store documentation, compose example and changelog
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git commit -m "docs: v1.1.0 store documentation, compose example and changelog"
 ```
 
 - [ ] **Step 4 : Stack locale**
@@ -3876,9 +3851,7 @@ Avec des résultats affichés (recherche « maupassant », FR), capturer la page
 - [ ] **Step 7 : Fusion, CI, tag**
 
 ```bash
-cd /home/clem/bookmallow && git add docs/screenshot-store.png bookmallow/static/app.js && git commit -m "docs: store screenshot; deep link ?tab=store&q= for sharing searches
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+cd /home/clem/bookmallow && git add docs/screenshot-store.png bookmallow/static/app.js && git commit -m "docs: store screenshot; deep link ?tab=store&q= for sharing searches"
 git checkout main && git merge --ff-only feat/store && git push origin main
 gh run watch --repo clemdepernet/bookmallow --exit-status $(gh run list --repo clemdepernet/bookmallow --workflow CI --limit 1 --json databaseId -q '.[0].databaseId')
 git tag -a v1.1.0 -m "Bookmallow 1.1.0 — audiobook store" && git push origin v1.1.0

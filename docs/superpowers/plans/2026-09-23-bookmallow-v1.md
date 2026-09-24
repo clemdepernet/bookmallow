@@ -14,7 +14,6 @@
 
 - Dépôt : `/home/clem/bookmallow`, remote `upstream` = dépôt d'origine (MIT, historique conservé). Le remote `origin` (`clemdepernet/bookmallow`) est créé en Task 14 seulement.
 - Prose des commits, README et docs : le README est bilingue FR puis EN ; code, commentaires, messages d'erreur serveur et commits en anglais ; l'interface est traduite FR/EN côté client.
-- Chaque commit se termine par la ligne `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
 - Python : `from __future__ import annotations` en tête de chaque module ; aucune dépendance hors `flask`, `gunicorn`, `yt-dlp[default]` (runtime) et `pytest` (dev).
 - Aucune ressource externe (CDN, police web) dans le frontend.
 - Variables d'environnement et défauts exacts (spec §9) : `DATA_DIR=/data`, `MAX_FILES=6`, `DEFAULT_QUALITY=64`, `APP_PASSWORD=` (vide), `SECRET_KEY` (généré dans `/data/.secret`), `MIN_FREE_MB=500`, `MAX_DURATION_HOURS=0` (0 = illimité), `DEFAULT_LANG=fr`, `TZ=UTC`, `PUID=1000`, `PGID=1000`, `FORCE_HTTPS` (absent = non).
@@ -178,9 +177,7 @@ Attendu : `1 passed`. Si l'installation de `yt-dlp[default]` est lente sur le Pi
 - [ ] **Step 4 : Commit**
 
 ```bash
-git add -A && git commit -m "chore: strip original app, add Python skeleton and test tooling
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add -A && git commit -m "chore: strip original app, add Python skeleton and test tooling"
 ```
 
 ---
@@ -383,9 +380,7 @@ Attendu : `10 passed`.
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/config.py tests/test_config.py && git commit -m "feat: environment-driven configuration
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/config.py tests/test_config.py && git commit -m "feat: environment-driven configuration"
 ```
 
 ---
@@ -564,9 +559,7 @@ Attendu : tous `passed`.
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/urls.py tests/test_urls.py && git commit -m "feat: YouTube URL parsing and validation
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/urls.py tests/test_urls.py && git commit -m "feat: YouTube URL parsing and validation"
 ```
 
 ---
@@ -684,9 +677,7 @@ Run : `.venv/bin/pytest tests/test_names.py` → `7 passed`.
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/names.py tests/test_names.py && git commit -m "feat: safe and unique file names
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/names.py tests/test_names.py && git commit -m "feat: safe and unique file names"
 ```
 
 ---
@@ -920,9 +911,7 @@ Run : `.venv/bin/pytest tests/test_jobs_state.py` → `9 passed`.
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/jobs.py bookmallow/state.py tests/test_jobs_state.py && git commit -m "feat: job model and atomic state store
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/jobs.py bookmallow/state.py tests/test_jobs_state.py && git commit -m "feat: job model and atomic state store"
 ```
 
 ---
@@ -1051,9 +1040,7 @@ def remove_partials(directory: Path) -> list[Path]:
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/retention.py tests/test_retention.py && git commit -m "feat: retention of the newest N files
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/retention.py tests/test_retention.py && git commit -m "feat: retention of the newest N files"
 ```
 
 ---
@@ -1320,9 +1307,7 @@ def fetch_playlist(url: str, runner: Runner = default_runner, timeout: float = 9
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/metadata.py tests/test_metadata.py && git commit -m "feat: yt-dlp metadata fetching and error classification
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/metadata.py tests/test_metadata.py && git commit -m "feat: yt-dlp metadata fetching and error classification"
 ```
 
 ---
@@ -1755,9 +1740,7 @@ class Conversion:
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/converter.py tests/test_converter.py && git commit -m "feat: streaming yt-dlp to ffmpeg conversion with progress and cancel
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/converter.py tests/test_converter.py && git commit -m "feat: streaming yt-dlp to ffmpeg conversion with progress and cancel"
 ```
 
 ---
@@ -2224,9 +2207,7 @@ class JobQueue:
 - [ ] **Step 5 : Commit**
 
 ```bash
-git add bookmallow/jobqueue.py tests/test_jobqueue.py && git commit -m "feat: single-worker job queue with guards, cancel and recovery
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/jobqueue.py tests/test_jobqueue.py && git commit -m "feat: single-worker job queue with guards, cancel and recovery"
 ```
 
 ---
@@ -2776,9 +2757,7 @@ app = create_app()
 - [ ] **Step 6 : Commit**
 
 ```bash
-git add bookmallow/auth.py bookmallow/app.py bookmallow/templates wsgi.py tests/test_app.py && git commit -m "feat: Flask app with JSON API, downloads and optional password
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/auth.py bookmallow/app.py bookmallow/templates wsgi.py tests/test_app.py && git commit -m "feat: Flask app with JSON API, downloads and optional password"
 ```
 
 ---
@@ -3608,9 +3587,7 @@ Ouvrir `http://<ip-du-pi>:7843` (ou via tunnel SSH) : la page pastel s'affiche, 
 - [ ] **Step 10 : Commit**
 
 ```bash
-git add bookmallow/templates bookmallow/static tests/test_frontend.py && git commit -m "feat: pastel single-page UI with FR/EN, queue, library and playlist dialog
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add bookmallow/templates bookmallow/static tests/test_frontend.py && git commit -m "feat: pastel single-page UI with FR/EN, queue, library and playlist dialog"
 ```
 
 ---
@@ -3795,9 +3772,7 @@ Nettoyage : `docker rm -f bm-e2e && rm -rf .../bm-data`.
 - [ ] **Step 6 : Commit**
 
 ```bash
-git add Dockerfile entrypoint.sh .dockerignore docker-compose.yml && git commit -m "build: slim multi-stage image with ffmpeg, deno, PUID/PGID entrypoint and healthcheck
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add Dockerfile entrypoint.sh .dockerignore docker-compose.yml && git commit -m "build: slim multi-stage image with ffmpeg, deno, PUID/PGID entrypoint and healthcheck"
 ```
 
 ---
@@ -4108,9 +4083,7 @@ Vérifier à l'œil que les YAML sont bien indentés (ou `docker compose config 
 - [ ] **Step 9 : Commit**
 
 ```bash
-git add .github CHANGELOG.md CONTRIBUTING.md LICENSE README.md docs/reddit-post.md docs/screenshot.png && git commit -m "docs: bilingual README, CI and release workflows, changelog, Reddit draft
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+git add .github CHANGELOG.md CONTRIBUTING.md LICENSE README.md docs/reddit-post.md docs/screenshot.png && git commit -m "docs: bilingual README, CI and release workflows, changelog, Reddit draft"
 ```
 
 ---
