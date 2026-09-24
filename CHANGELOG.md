@@ -1,3 +1,9 @@
+## 1.2.0 — 2026-09-25
+
+- New identity: Bookmallow is an audiobook companion. "Find a book" is now the home tab; YouTube becomes "Import from YouTube".
+- New visual direction: paper, ink, bordeaux and powder rose, serif headings, book-cover cards, underlined tabs; new open-book logo. Still no external fonts, scripts or styles.
+- Copy rewritten in both languages; README repositioned around the library.
+
 # Changelog
 
 ## 1.1.0 — 2026-09-24

@@ -58,7 +58,7 @@ def test_no_external_resources():
 
 def test_palette_tokens_present():
     css = (ROOT / "static" / "style.css").read_text(encoding="utf-8")
-    for color in ("#FFF7F9", "#F8C8D8", "#E75A8C", "#C9B6F2", "#BDEBD5", "#F49A8B", "#4A2A3C"):
+    for color in ("#FAF3EE", "#3B2430", "#7A2E45", "#E8A6B8", "#C9A45C", "#2F6B4F", "#A8323E"):
         assert color.lower() in css.lower()
 
 

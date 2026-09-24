@@ -1,22 +1,27 @@
 <p align="center"><img src="bookmallow/static/logo.svg" width="96" alt=""></p>
 <h1 align="center">Bookmallow</h1>
-<p align="center">Tes vidéos YouTube en audiobooks MP3, en douceur. · Your YouTube videos as audiobook MP3s, gently.</p>
-<p align="center"><img src="docs/screenshot.png" width="720" alt="Bookmallow screenshot"></p>
+<p align="center">Ton compagnon de livres audio, chez toi. · Your audiobook companion, at home.</p>
+<p align="center"><img src="docs/screenshot-store.png" width="720" alt="Bookmallow, onglet Trouver un livre"></p>
 
 ---
 
 ## 🇫🇷 Français
 
-Bookmallow est un petit conteneur auto-hébergé : tu colles un lien YouTube, il te rend un MP3 « audiobook », depuis une interface pastel accessible depuis ton téléphone. Il est conçu pour un Raspberry Pi et pour les vidéos **très** longues (10 h, 17 h…) : l'audio est converti **en streaming**, sans jamais stocker la vidéo ni l'audio brut sur le disque.
+Bookmallow est un petit serveur de livres audio à héberger soi-même, pensé pour un Raspberry Pi et pour le téléphone de la personne qui écoute. Depuis une page sobre et chaleureuse, on cherche un livre, on l'ajoute à sa bibliothèque, et Bookmallow le prépare en **un seul fichier M4B** avec chapitres et couverture, prêt pour n'importe quelle application de livres audio. Il ne garde que les derniers livres pour ne jamais remplir le disque.
 
-### Pourquoi
+Deux façons de remplir sa bibliothèque :
 
-- **Zéro fichier intermédiaire** : `yt-dlp` envoie l'audio directement à `ffmpeg`. Une vidéo de 10 h pèse ~290 Mo en 64 kbps mono, au lieu de 1,5 Go de pic avec un téléchargement classique.
-- **File d'attente** : une conversion à la fois, progression en direct, annulation, reprise après redémarrage.
-- **Rétention** : Bookmallow ne garde que les `MAX_FILES` derniers fichiers (6 par défaut). L'interface le rappelle et marque le prochain fichier qui disparaîtra.
-- **Pour partager** : mot de passe optionnel, interface FR/EN, aucun script, style ou police externes (les vignettes des vidéos sont chargées par le navigateur depuis le CDN d'images de YouTube).
+- **Trouver un livre** : des milliers de livres audio libres de [LibriVox](https://librivox.org) et d'[Internet Archive](https://archive.org), en français et en anglais, et, en option, tes propres indexeurs via Prowlarr et qBittorrent.
+- **Importer depuis YouTube** : une lecture, une conférence ou un livre lu sur YouTube devient un MP3 léger, converti en streaming sans jamais poser la vidéo sur le disque, même pour dix-sept heures d'écoute.
 
-### Démarrer en 3 commandes
+### Ce qui le rend agréable
+
+- **Un seul fichier par livre** : M4B chapitré avec couverture pour les livres, MP3 avec chapitres pour YouTube, en 64 kbps mono par défaut (environ 29 Mo par heure).
+- **Léger pour le Pi** : une préparation à la fois, progression en direct, annulation, reprise après redémarrage, garde-fou d'espace disque.
+- **Rien ne s'accumule** : Bookmallow garde les `MAX_FILES` derniers livres (6 par défaut), le dit clairement et marque le prochain qui disparaîtra.
+- **Fait pour être partagé** : mot de passe optionnel, interface français / anglais, aucun script, style ou police externes (seules les couvertures sont chargées depuis LibriVox, Internet Archive ou YouTube).
+
+### Démarrer en trois commandes
 
 ```bash
 mkdir bookmallow && cd bookmallow
@@ -24,35 +29,15 @@ curl -fsSLO https://raw.githubusercontent.com/clemdepernet/bookmallow/main/docke
 docker compose up -d
 ```
 
-Ouvre `http://<ton-serveur>:7843`. Les MP3 arrivent dans `./data`.
+Ouvre `http://<ton-serveur>:7843`. Les livres arrivent dans `./data`.
 
-### Configuration
+### Trouver un livre
 
-| Variable | Défaut | Rôle |
-|---|---|---|
-| `MAX_FILES` | `6` | Nombre de MP3 conservés ; les plus anciens sont supprimés |
-| `DEFAULT_QUALITY` | `64` | `64` (voix, mono, ~29 Mo/h), `128` (~58 Mo/h) ou `192` (~86 Mo/h) |
-| `APP_PASSWORD` | vide | Mot de passe partagé ; vide = pas de connexion |
-| `DEFAULT_LANG` | `fr` | `fr` ou `en` (chaque personne peut basculer) |
-| `MIN_FREE_MB` | `500` | Espace disque à toujours garder libre |
-| `MAX_DURATION_HOURS` | `0` | `0` = aucune limite de durée |
-| `PUID` / `PGID` | `1000` | Propriétaire des fichiers dans `./data` |
-| `TZ` | `UTC` | Fuseau horaire des logs. L'exemple docker-compose.yml met Europe/Paris : adapte-le |
-| `YTDLP_AUTO_UPDATE` | `0` | `1` = met yt-dlp à jour à chaque démarrage |
-| `FORCE_HTTPS` | `0` | `1` derrière un reverse proxy HTTPS (cookie `Secure`) |
-| `SECRET_KEY` | générée | Clé des sessions, persistée dans `/data/.secret` |
-| `LOG_LEVEL` | `INFO` | Niveau de log de gunicorn/Flask (`DEBUG`, `INFO`, `WARNING`…) |
-| `DATA_DIR` | `/data` | Dossier des MP3, de `state.json` et de `.secret` |
+L'onglet d'accueil cherche un titre ou un auteur et affiche chaque résultat comme une petite couverture : source « Libre » ou « Torrent », durée, langue. Un clic sur « Ajouter à ma bibliothèque » suffit ; les chapitres sont lus en streaming par ffmpeg et assemblés en M4B, sans fichier intermédiaire.
 
-### 📚 Magasin de livres audio (v1.1)
-
-<img src="docs/screenshot-store.png" width="720" alt="Bookmallow store tab">
-
-Le second onglet cherche des livres audio et les livre en **un seul fichier M4B** (chapitres, couverture), lisible par les apps de livres audio du téléphone.
-
-- **Sources libres, activées par défaut** : [LibriVox](https://librivox.org) et [Internet Archive](https://archive.org) (domaine public, lecteurs bénévoles, anglais très fourni, classiques français). Les chapitres sont lus en streaming par ffmpeg : aucun fichier intermédiaire.
-- **Tes indexeurs, en option** : si tu utilises déjà Prowlarr et qBittorrent, renseigne `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL`, `QBT_USER`, `QBT_PASSWORD`, monte le dossier de téléchargement de qBittorrent en lecture seule sur `/incoming` et place Bookmallow sur le même réseau Docker. Les résultats apparaissent avec un badge « Torrent » ; une fois le livre assemblé, le torrent et ses fichiers sont supprimés de qBittorrent. Ce que tu télécharges par cette voie relève de ta responsabilité.
-- Les livres suivent la **même rétention** que les MP3 : `MAX_FILES` compte tout.
+- **Sources libres, activées par défaut** : LibriVox et Internet Archive (domaine public, lecteurs bénévoles, catalogue anglais très fourni, classiques français).
+- **Tes indexeurs, en option** : si tu utilises déjà Prowlarr et qBittorrent, renseigne `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL`, `QBT_USER`, `QBT_PASSWORD`, monte le dossier de téléchargement de qBittorrent en lecture seule sur `/incoming` et place Bookmallow sur le même réseau Docker. Une fois le livre assemblé, le torrent et ses fichiers sont supprimés de qBittorrent. Ce que tu télécharges par cette voie relève de ta responsabilité.
+- Un lien partageable ouvre directement une recherche : `http://<ton-serveur>:7843/?tab=store&q=maupassant&lang=fr`.
 
 | Variable | Défaut | Rôle |
 |---|---|---|
@@ -89,13 +74,35 @@ networks:
     name: media-stack_medianet
 ```
 
-### Partager avec ses amies
+### Importer depuis YouTube
 
-Mets un `APP_PASSWORD`, puis expose le port 7843 avec ton reverse proxy habituel (Nginx Proxy Manager, Caddy, Traefik) ou un tunnel Cloudflare. Bookmallow n'accepte que des liens YouTube et ne convertit qu'une vidéo à la fois : même partagé, il reste sage avec ton Pi. Attention : il n'y a **aucune limitation de tentatives** sur `/login` ; si tu exposes l'app sur Internet, mets une protection devant (Cloudflare Access, une liste d'accès dans Nginx Proxy Manager, ou fail2ban) et active `FORCE_HTTPS=1` derrière un reverse proxy TLS.
+<img src="docs/screenshot.png" width="720" alt="Bookmallow, onglet Importer depuis YouTube">
 
-### YouTube change souvent
+Colle un lien : `yt-dlp` envoie l'audio directement à `ffmpeg`, qui écrit le MP3 final. Une vidéo de dix heures pèse environ 290 Mo, au lieu de 1,5 Go de pic avec un téléchargement classique. Les playlists proposent de choisir les vidéos à importer.
 
-`yt-dlp` doit suivre YouTube de près. L'image est reconstruite **chaque lundi** avec la dernière version : un `docker compose pull && docker compose up -d` suffit. En dépannage rapide, `YTDLP_AUTO_UPDATE=1` met yt-dlp à jour au démarrage du conteneur. Une erreur « vérification anti-robot » signifie que YouTube challenge l'adresse IP du serveur : mettre yt-dlp à jour (`YTDLP_AUTO_UPDATE=1`) ou patienter quelques heures résout généralement le problème.
+`yt-dlp` doit suivre YouTube de près : l'image est reconstruite **chaque lundi** avec la dernière version, un `docker compose pull && docker compose up -d` suffit. En dépannage rapide, `YTDLP_AUTO_UPDATE=1` met yt-dlp à jour au démarrage. Une erreur « vérification anti-robot » signifie que YouTube challenge l'adresse IP du serveur : mettre yt-dlp à jour ou patienter quelques heures résout généralement le problème.
+
+### Configuration générale
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `MAX_FILES` | `6` | Nombre de livres conservés ; les plus anciens sont supprimés |
+| `DEFAULT_QUALITY` | `64` | `64` (voix, mono, ~29 Mo/h), `128` (~58 Mo/h) ou `192` (~86 Mo/h) pour les imports YouTube |
+| `APP_PASSWORD` | vide | Mot de passe partagé ; vide = pas de connexion |
+| `DEFAULT_LANG` | `fr` | `fr` ou `en` (chaque personne peut basculer) |
+| `MIN_FREE_MB` | `500` | Espace disque à toujours garder libre |
+| `MAX_DURATION_HOURS` | `0` | `0` = aucune limite de durée |
+| `PUID` / `PGID` | `1000` | Propriétaire des fichiers dans `./data` |
+| `TZ` | `UTC` | Fuseau horaire des logs. L'exemple docker-compose.yml met Europe/Paris : adapte-le |
+| `YTDLP_AUTO_UPDATE` | `0` | `1` = met yt-dlp à jour à chaque démarrage |
+| `FORCE_HTTPS` | `0` | `1` derrière un reverse proxy HTTPS (cookie `Secure`) |
+| `SECRET_KEY` | générée | Clé des sessions, persistée dans `/data/.secret` |
+| `LOG_LEVEL` | `INFO` | Niveau de log de gunicorn/Flask (`DEBUG`, `INFO`, `WARNING`…) |
+| `DATA_DIR` | `/data` | Dossier des livres, de `state.json` et de `.secret` |
+
+### Partager avec ses proches
+
+Mets un `APP_PASSWORD`, puis expose le port 7843 avec ton reverse proxy habituel (Nginx Proxy Manager, Caddy, Traefik) ou un tunnel Cloudflare. Bookmallow ne prépare qu'un livre à la fois : même partagé, il reste sage avec ton Pi. Attention : il n'y a **aucune limitation de tentatives** sur `/login` ; si tu exposes l'app sur Internet, mets une protection devant (Cloudflare Access, une liste d'accès dans Nginx Proxy Manager, ou fail2ban) et active `FORCE_HTTPS=1` derrière un reverse proxy TLS.
 
 ### Construire soi-même
 
@@ -109,14 +116,19 @@ docker compose up -d --build        # après avoir décommenté `build: .`
 
 ## 🇬🇧 English
 
-Bookmallow is a tiny self-hosted container: paste a YouTube link, get an audiobook-style MP3 from a pastel web UI that works on your phone. It is built for a Raspberry Pi and for **very** long videos (10 h, 17 h…): audio is converted **while streaming**, the video or raw audio is never written to disk.
+Bookmallow is a small self-hosted audiobook server, designed for a Raspberry Pi and for the phone of whoever is listening. From one calm, warm page you look for a book, add it to your library, and Bookmallow prepares it as **a single M4B file** with chapters and cover art, ready for any audiobook app. It only keeps the latest books, so the disk never fills up.
 
-### Why
+Two ways to fill the library:
 
-- **No intermediate file**: `yt-dlp` pipes audio straight into `ffmpeg`. A 10-hour video is ~290 MB at 64 kbps mono instead of a 1.5 GB peak with a classic download-then-convert.
-- **Queue**: one conversion at a time, live progress, cancel, recovery after a restart.
-- **Retention**: only the newest `MAX_FILES` files are kept (6 by default). The UI says so and marks the next file to go.
-- **Made to share**: optional password, FR/EN interface, no external scripts, styles or fonts (video thumbnails are loaded by the browser from YouTube's image CDN).
+- **Find a book**: thousands of free audiobooks from [LibriVox](https://librivox.org) and [Internet Archive](https://archive.org), in French and English, plus your own indexers through Prowlarr and qBittorrent if you want them.
+- **Import from YouTube**: a reading, a lecture or a narrated book on YouTube becomes a light MP3, converted while streaming without ever writing the video to disk, even for seventeen hours of listening.
+
+### What makes it pleasant
+
+- **One file per book**: a chaptered M4B with cover for books, an MP3 with chapters for YouTube imports, 64 kbps mono by default (about 29 MB per hour).
+- **Gentle on the Pi**: one preparation at a time, live progress, cancel, recovery after a restart, disk-space guard.
+- **Nothing piles up**: Bookmallow keeps the `MAX_FILES` most recent books (6 by default), says so plainly and marks the next one to go.
+- **Made to share**: optional password, French / English interface, no external scripts, styles or fonts (only cover images are loaded from LibriVox, Internet Archive or YouTube).
 
 ### Quick start
 
@@ -126,33 +138,15 @@ curl -fsSLO https://raw.githubusercontent.com/clemdepernet/bookmallow/main/docke
 docker compose up -d
 ```
 
-Open `http://<your-server>:7843`. MP3s land in `./data`.
+Open `http://<your-server>:7843`. Books land in `./data`.
 
-### Configuration
+### Find a book
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `MAX_FILES` | `6` | MP3s kept; older ones are deleted |
-| `DEFAULT_QUALITY` | `64` | `64` (voice, mono, ~29 MB/h), `128` (~58 MB/h) or `192` (~86 MB/h) |
-| `APP_PASSWORD` | empty | Shared password; empty = no login |
-| `DEFAULT_LANG` | `fr` | `fr` or `en` (each visitor can switch) |
-| `MIN_FREE_MB` | `500` | Disk space to always keep free |
-| `MAX_DURATION_HOURS` | `0` | `0` = no duration limit |
-| `PUID` / `PGID` | `1000` | Owner of the files in `./data` |
-| `TZ` | `UTC` | Log timezone. The example docker-compose.yml sets Europe/Paris: adjust it |
-| `YTDLP_AUTO_UPDATE` | `0` | `1` = upgrade yt-dlp at every start |
-| `FORCE_HTTPS` | `0` | `1` behind an HTTPS reverse proxy (`Secure` cookie) |
-| `SECRET_KEY` | generated | Session key, persisted in `/data/.secret` |
-| `LOG_LEVEL` | `INFO` | gunicorn/Flask log level (`DEBUG`, `INFO`, `WARNING`…) |
-| `DATA_DIR` | `/data` | Folder for the MP3s, `state.json` and `.secret` |
+The home tab searches a title or an author and shows each result as a small book cover: "Free" or "Torrent" source, duration, language. One click on "Add to my library" is enough; chapters are streamed straight into ffmpeg and assembled into an M4B, with no intermediate file.
 
-### 📚 Audiobook store (v1.1)
-
-The second tab searches audiobooks and delivers each one as **a single M4B file** (chapters, cover art) that phone audiobook apps understand.
-
-- **Free sources, on by default**: [LibriVox](https://librivox.org) and [Internet Archive](https://archive.org) (public domain, volunteer readers, huge English catalogue, French classics). Chapters are streamed straight into ffmpeg: no intermediate files.
-- **Your indexers, optional**: if you already run Prowlarr and qBittorrent, set `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL`, `QBT_USER`, `QBT_PASSWORD`, mount qBittorrent's download folder read-only at `/incoming` and put Bookmallow on the same Docker network. Results show a "Torrent" badge; once a book is assembled, the torrent and its files are removed from qBittorrent. What you download this way is your responsibility.
-- Books follow the **same retention** as MP3s: `MAX_FILES` counts everything.
+- **Free sources, on by default**: LibriVox and Internet Archive (public domain, volunteer readers, huge English catalogue, French classics).
+- **Your indexers, optional**: if you already run Prowlarr and qBittorrent, set `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL`, `QBT_USER`, `QBT_PASSWORD`, mount qBittorrent's download folder read-only at `/incoming` and put Bookmallow on the same Docker network. Once a book is assembled, the torrent and its files are removed from qBittorrent. What you download this way is your responsibility.
+- A shareable link opens a search directly: `http://<your-server>:7843/?tab=store&q=austen&lang=en`.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -189,13 +183,33 @@ networks:
     name: media-stack_medianet
 ```
 
-### Sharing with friends
+### Import from YouTube
 
-Set `APP_PASSWORD`, then expose port 7843 through your usual reverse proxy (Nginx Proxy Manager, Caddy, Traefik) or a Cloudflare tunnel. Bookmallow only accepts YouTube links and converts one video at a time, so it stays gentle with your Pi even when shared. Note that there is **no rate limiting** on `/login`; if you expose the app to the internet, put a guard in front of it (Cloudflare Access, an Nginx Proxy Manager access list, or fail2ban) and set `FORCE_HTTPS=1` behind a TLS-terminating reverse proxy.
+Paste a link: `yt-dlp` pipes the audio straight into `ffmpeg`, which writes the final MP3. A ten-hour video weighs about 290 MB instead of a 1.5 GB peak with a classic download-then-convert. Playlists let you pick the videos to import.
 
-### YouTube changes often
+`yt-dlp` has to keep up with YouTube: the image is rebuilt **every Monday** with the latest release, so `docker compose pull && docker compose up -d` is all you need. As a quick fix, `YTDLP_AUTO_UPDATE=1` upgrades yt-dlp when the container starts. A "bot check" error means YouTube is challenging the server's IP address: updating yt-dlp or waiting a while usually resolves it.
 
-`yt-dlp` has to keep up with YouTube. The image is rebuilt **every Monday** with the latest release: `docker compose pull && docker compose up -d` is all you need. As a quick fix, `YTDLP_AUTO_UPDATE=1` upgrades yt-dlp when the container starts. A "bot check" error means YouTube is challenging the server's IP address: updating yt-dlp (`YTDLP_AUTO_UPDATE=1`) or waiting a while usually resolves it.
+### General configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MAX_FILES` | `6` | Books kept; older ones are deleted |
+| `DEFAULT_QUALITY` | `64` | `64` (voice, mono, ~29 MB/h), `128` (~58 MB/h) or `192` (~86 MB/h) for YouTube imports |
+| `APP_PASSWORD` | empty | Shared password; empty = no login |
+| `DEFAULT_LANG` | `fr` | `fr` or `en` (each visitor can switch) |
+| `MIN_FREE_MB` | `500` | Disk space to always keep free |
+| `MAX_DURATION_HOURS` | `0` | `0` = no duration limit |
+| `PUID` / `PGID` | `1000` | Owner of the files in `./data` |
+| `TZ` | `UTC` | Log timezone. The example docker-compose.yml sets Europe/Paris: adjust it |
+| `YTDLP_AUTO_UPDATE` | `0` | `1` = upgrade yt-dlp at every start |
+| `FORCE_HTTPS` | `0` | `1` behind an HTTPS reverse proxy (`Secure` cookie) |
+| `SECRET_KEY` | generated | Session key, persisted in `/data/.secret` |
+| `LOG_LEVEL` | `INFO` | gunicorn/Flask log level (`DEBUG`, `INFO`, `WARNING`…) |
+| `DATA_DIR` | `/data` | Folder for the books, `state.json` and `.secret` |
+
+### Sharing with the people you love
+
+Set `APP_PASSWORD`, then expose port 7843 through your usual reverse proxy (Nginx Proxy Manager, Caddy, Traefik) or a Cloudflare tunnel. Bookmallow prepares one book at a time, so it stays gentle with your Pi even when shared. Note that there is **no rate limiting** on `/login`; if you expose the app to the internet, put a guard in front of it (Cloudflare Access, an Nginx Proxy Manager access list, or fail2ban) and set `FORCE_HTTPS=1` behind a TLS-terminating reverse proxy.
 
 ### Build it yourself
 
@@ -209,6 +223,6 @@ docker compose up -d --build        # after uncommenting `build: .`
 
 ## Credits
 
-Bookmallow started as a fork of [TheFatPanda-Dev/youtube-to-mp3-docker](https://github.com/TheFatPanda-Dev/youtube-to-mp3-docker) (MIT). Thank you! The backend was rewritten around streaming conversion, a queue and retention; the pastel UI is new.
+Bookmallow started as a fork of [TheFatPanda-Dev/youtube-to-mp3-docker](https://github.com/TheFatPanda-Dev/youtube-to-mp3-docker) (MIT). Thank you! The backend was rewritten around streaming conversion, a queue and retention, then grew into an audiobook companion.
 
-Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp), [ffmpeg](https://ffmpeg.org), [Flask](https://flask.palletsprojects.com) and [deno](https://deno.com). MIT license.
+Powered by [yt-dlp](https://github.com/yt-dlp/yt-dlp), [ffmpeg](https://ffmpeg.org), [Flask](https://flask.palletsprojects.com) and [deno](https://deno.com). Free audiobooks by the volunteers of [LibriVox](https://librivox.org) and the [Internet Archive](https://archive.org). MIT license.

@@ -12,11 +12,11 @@
   <main class="card login-card">
     <img class="logo big" src="{{ url_for('static', filename='logo.svg') }}" alt="" width="96" height="96">
     <h1>Bookmallow</h1>
-    <p class="lead">{% if lang == 'fr' %}Entre le mot de passe partagé pour continuer.{% else %}Enter the shared password to continue.{% endif %}</p>
+    <p class="lead">{% if lang == 'fr' %}Ta bibliothèque de livres audio t'attend. Entre le mot de passe partagé.{% else %}Your audiobook shelf is waiting. Enter the shared password.{% endif %}</p>
     <form method="post" class="login-form">
       <label class="sr-only" for="password">{% if lang == 'fr' %}Mot de passe{% else %}Password{% endif %}</label>
       <input id="password" name="password" type="password" autocomplete="current-password" autofocus required>
-      <button class="btn primary" type="submit">{% if lang == 'fr' %}Entrer 🎀{% else %}Enter 🎀{% endif %}</button>
+      <button class="btn primary" type="submit">{% if lang == 'fr' %}Ouvrir la bibliothèque{% else %}Open the library{% endif %}</button>
     </form>
     {% if error %}<p class="form-msg error" role="alert">{% if lang == 'fr' %}Mot de passe incorrect.{% else %}Wrong password.{% endif %}</p>{% endif %}
   </main>
