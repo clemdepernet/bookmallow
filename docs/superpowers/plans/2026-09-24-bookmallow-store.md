@@ -1177,8 +1177,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: T1 `Config` (prowlarr_url, prowlarr_api_key, store_timeout_s, qbt_*), T2 models/http.
 - Produces (`prowlarr.py`) : `search(q, config, fetch=get_json, limit=30) -> list[SearchResult]` (source `"prowlarr"`, `source_id` = 16 premiers hex du SHA-1 du `guid`, `download` = `magnetUrl` sinon `downloadUrl`, triés par `seeders` décroissant, `language` deviné dans le titre), `guess_language(title) -> str | None`.
-- Produces (`qbittorrent.py`) : `class QbtError(StoreError)` ; `@dataclass TorrentInfo(hash, name, progress: float, state: str, content_path: str, size: int, downloaded: int)` ; `Transport = Callable[[str, str, dict | None, dict], tuple[int, str]]` (`(method, url, form_data, headers) -> (status, body)`) ; `class QbtClient(base_url, user, password, transport=None, timeout=20.0)` avec `login() -> None`, `ensure_category(name) -> None`, `add(download, category, tags: list[str]) -> None`, `find_by_tag(tag) -> TorrentInfo | None`, `info(hash) -> TorrentInfo | None`, `delete(hash, delete_files=True) -> None`. Codes : `qbt_auth` (403 ou login ≠ `Ok.`), `torrent_add` (add ≠ `Ok.`), `provider_error` (autres HTTP/erreurs réseau).
-- Faits d'API : qBittorrent exige les en-têtes `Referer`/`Origin` égaux à l'URL de base ; `auth/login` renvoie le texte `Ok.` et pose le cookie `SID` ; `torrents/add` renvoie `Ok.` ou `Fails.` ; `torrents/info?tag=<tag>` et `?hashes=<hash>` renvoient une liste JSON avec `hash, name, progress (0–1), state, content_path, size, downloaded` ; `torrents/createCategory` renvoie 409 si la catégorie existe ; `torrents/delete` prend `hashes` et `deleteFiles`.
+- Produces (`qbittorrent.py`) : `class QbtError(StoreError)` ; `@dataclass TorrentInfo(hash, name, progress: float, state: str, content_path: str, size: int, downloaded: int)` ; `Transport = Callable[[str, str, dict | None, dict], tuple[int, str]]` (`(method, url, form_data, headers) -> (status, body)`) ; `class QbtClient(base_url, user, password, transport=None, timeout=20.0)` avec `login() -> None`, `ensure_category(name) -> None`, `add(download, category, tags: list[str]) -> None`, `find_by_tag(tag) -> TorrentInfo | None`, `info(hash) -> TorrentInfo | None`, `delete(hash, delete_files=True) -> None`. Codes : `qbt_auth` (HTTP 401/403, ou corps de login autre que vide/`Ok.`), `torrent_add` (corps d'ajout autre que vide/`Ok.`), `provider_error` (autres HTTP/erreurs réseau).
+- Faits d'API (vérifiés sur qBittorrent 5.2.3) : les en-têtes `Referer`/`Origin` doivent valoir l'URL de base ; `auth/login` réussi renvoie **HTTP 204 sans corps** (les versions 4.x renvoient 200 `Ok.`) et pose un cookie `SID`/`QBT_SID_<port>` ; mot de passe faux → **401** (403 quand la session est bannie) ; `torrents/add` renvoie 200 `Ok.` (ou 204) et `Fails.` en échec ; `torrents/info?tag=<tag>` et `?hashes=<hash>` renvoient une liste JSON avec `hash, name, progress (0–1), state, content_path, size, downloaded` ; `torrents/createCategory` renvoie 409 si la catégorie existe ; `torrents/delete` prend `hashes` et `deleteFiles`.
 
 - [ ] **Step 1 : Tests**
 
@@ -1272,8 +1272,9 @@ INFO = [{"hash": "abc", "name": "Book", "progress": 0.5, "state": "downloading",
          "size": 1000, "downloaded": 500}]
 
 
-def test_login_sets_headers_and_accepts_ok():
-    t = Script([(200, "Ok.")])
+@pytest.mark.parametrize("response", [(200, "Ok."), (204, "")])
+def test_login_sets_headers_and_accepts_ok(response):
+    t = Script([response])
     c = qb.QbtClient("http://qbt:8080/", "admin", "pw", transport=t)
     c.login()
     method, url, data, headers = t.calls[0]
@@ -1282,7 +1283,7 @@ def test_login_sets_headers_and_accepts_ok():
     assert headers["Referer"] == "http://qbt:8080" and headers["Origin"] == "http://qbt:8080"
 
 
-@pytest.mark.parametrize("response", [(200, "Fails."), (403, "Forbidden")])
+@pytest.mark.parametrize("response", [(200, "Fails."), (403, "Forbidden"), (401, "Unauthorized")])
 def test_login_refused(response):
     c = qb.QbtClient("http://qbt:8080", "admin", "pw", transport=Script([response]))
     with pytest.raises(qb.QbtError) as exc:
@@ -1475,11 +1476,11 @@ class QbtClient:
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise QbtError("provider_error", f"qBittorrent unreachable: {getattr(exc, 'reason', exc)}") from exc
 
-    def _call(self, path: str, data: dict | None = None, ok_statuses: tuple[int, ...] = (200,)) -> str:
+    def _call(self, path: str, data: dict | None = None, ok_statuses: tuple[int, ...] = (200, 204)) -> str:
         headers = {"User-Agent": USER_AGENT, "Referer": self.base_url, "Origin": self.base_url}
         status, body = self._transport("POST" if data is not None else "GET", f"{self.base_url}{path}", data, headers)
-        if status == 403:
-            raise QbtError("qbt_auth", "qBittorrent refused the session (403)")
+        if status in (401, 403):
+            raise QbtError("qbt_auth", f"qBittorrent refused the credentials or session ({status})")
         if status not in ok_statuses:
             raise QbtError("provider_error", f"qBittorrent HTTP {status} on {path}: {body[:120]}")
         return body
@@ -1488,15 +1489,15 @@ class QbtClient:
 
     def login(self) -> None:
         body = self._call("/api/v2/auth/login", {"username": self._user, "password": self._password})
-        if body.strip() != "Ok.":
+        if body.strip() not in ("", "Ok."):  # 5.x answers 204 with an empty body, 4.x answers 200 "Ok."
             raise QbtError("qbt_auth", "qBittorrent login refused")
 
     def ensure_category(self, name: str) -> None:
-        self._call("/api/v2/torrents/createCategory", {"category": name, "savePath": ""}, ok_statuses=(200, 409))
+        self._call("/api/v2/torrents/createCategory", {"category": name, "savePath": ""}, ok_statuses=(200, 204, 409))
 
     def add(self, download: str, category: str, tags: list[str]) -> None:
         body = self._call("/api/v2/torrents/add", {"urls": download, "category": category, "tags": ",".join(tags)})
-        if body.strip() != "Ok.":
+        if body.strip() not in ("", "Ok."):
             raise QbtError("torrent_add", f"qBittorrent answered {body.strip()[:80] or 'nothing'}")
 
     def _infos(self, query: str) -> list[TorrentInfo]:
