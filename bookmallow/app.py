@@ -16,6 +16,9 @@ from .auth import check_password, is_authenticated, login_required
 from .config import QUALITIES, Config
 from .jobqueue import DuplicateJob, JobQueue
 from .state import StateStore
+from .store import providers_available
+from .store.models import StoreError
+from .store.search import SearchCache, resolve_result, unified_search
 
 log = logging.getLogger(__name__)
 PLAYLIST_PREVIEW_LIMIT = 200
@@ -83,6 +86,7 @@ def build_state(config: Config, q: JobQueue) -> dict:
             "default_lang": config.default_lang,
             "auth_enabled": config.auth_enabled,
         },
+        "store": {"enabled": config.store_enabled, "providers": providers_available(config)},
     }
 
 
@@ -150,8 +154,43 @@ def _submit(config: Config, q: JobQueue, fetch_playlist):
     return jsonify(**payload), 201
 
 
+STORE_LANGS = ("fr", "en", "all")
+
+
+def _store_submit(config: Config, q: JobQueue, cache: SearchCache, store_resolve):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="bad_request", detail="body must be JSON"), 400
+    quality = str(data.get("quality") or config.default_quality)
+    if quality not in QUALITIES:
+        return jsonify(error="bad_quality"), 400
+    key = str(data.get("key") or "")
+    if not key and data.get("source") and data.get("source_id"):
+        key = f"{data['source']}:{data['source_id']}"
+    source, sep, source_id = key.partition(":")
+    if not sep or not source or not source_id:
+        return jsonify(error="bad_request", detail="key must be <source>:<id>"), 400
+    result = cache.lookup(key)
+    if result is None:
+        try:
+            result = store_resolve(source, source_id, config)
+        except StoreError as exc:
+            status = 404 if exc.code == "not_found" else 502
+            return jsonify(error=exc.code if status == 404 else "provider_error", detail=exc.detail), status
+    if result is None:
+        return jsonify(error="not_found"), 404
+    if result.source == "prowlarr" and not config.torrent_enabled:
+        return jsonify(error="store_disabled"), 400
+    try:
+        job = q.submit_book(result, quality)
+    except DuplicateJob as exc:
+        return jsonify(error="duplicate", jobs=[exc.job.to_dict()]), 409
+    return jsonify(jobs=[job.to_dict()]), 201
+
+
 def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, start_worker: bool = True,
-               fetch_playlist=md.fetch_playlist) -> Flask:
+               fetch_playlist=md.fetch_playlist, store_search=unified_search,
+               store_resolve=resolve_result) -> Flask:
     config = config or cfg.load()
     app = Flask(__name__)
     app.config.update(
@@ -171,12 +210,18 @@ def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, s
         q.start()
     app.extensions["jobqueue"] = q
 
+    cache = SearchCache()
+    app.extensions["store_cache"] = cache
+    if config.torrent_config_state == "partial":
+        log.warning("torrent support stays disabled: set PROWLARR_URL, PROWLARR_API_KEY and QBT_URL together")
+
     @app.after_request
     def _security_headers(response):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com; "
+            "default-src 'self'; img-src 'self' data: https://*.ytimg.com https://*.ggpht.com "
+            "https://archive.org https://*.archive.org https://librivox.org https://*.librivox.org; "
             "frame-ancestors 'none'"
         )
         return response
@@ -218,6 +263,25 @@ def create_app(config: Config | None = None, jobqueue: JobQueue | None = None, s
     @login_required
     def api_submit():
         return _submit(config, q, fetch_playlist)
+
+    @app.get("/api/store/search")
+    @login_required
+    def api_store_search():
+        if not config.store_enabled or all(v != "enabled" for v in providers_available(config).values()):
+            return jsonify(error="store_disabled"), 503
+        q_text = (request.args.get("q") or "").strip()
+        lang = request.args.get("lang") or "all"
+        if not 2 <= len(q_text) <= 100 or lang not in STORE_LANGS:
+            return jsonify(error="bad_request"), 400
+        results, providers = store_search(q_text, lang, config, cache)
+        return jsonify(results=[r.public() for r in results], providers=providers)
+
+    @app.post("/api/store/jobs")
+    @login_required
+    def api_store_submit():
+        if not config.store_enabled:
+            return jsonify(error="store_disabled"), 503
+        return _store_submit(config, q, cache, store_resolve)
 
     @app.delete("/api/jobs/<job_id>")
     @login_required
