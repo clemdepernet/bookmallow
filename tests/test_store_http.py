@@ -67,3 +67,15 @@ def test_get_bytes_caps_size_and_returns_type(monkeypatch):
     assert body == b"x" * 10 and ctype == "image/jpeg"
     with pytest.raises(StoreError):
         http.get_bytes("https://a/c.jpg", max_bytes=5)
+
+
+def test_read_failure_becomes_store_error(monkeypatch):
+    class Flaky(FakeResponse):
+        def read(self, *a):
+            raise OSError("connection reset")
+    monkeypatch.setattr(http.urllib.request, "urlopen", lambda req, timeout: Flaky(b""))
+    with pytest.raises(StoreError) as exc:
+        http.get_json("https://a/b")
+    assert exc.value.code == "provider_error" and "transfer failed" in exc.value.detail
+    with pytest.raises(StoreError):
+        http.get_bytes("https://a/c.jpg")

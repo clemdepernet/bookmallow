@@ -1,6 +1,7 @@
 """Tiny HTTP helpers for the store: JSON GET and small binary GET, stdlib only."""
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.parse
@@ -34,11 +35,18 @@ def _open(url: str, timeout: float, headers: Mapping[str, str] | None):
         raise StoreError("provider_error", f"{_host(url)}: {reason}") from exc
 
 
+def _read(resp, url: str, size: int = -1) -> bytes:
+    try:
+        return resp.read() if size < 0 else resp.read(size)
+    except (TimeoutError, OSError, http.client.HTTPException) as exc:
+        raise StoreError("provider_error", f"{_host(url)}: transfer failed ({exc.__class__.__name__})") from exc
+
+
 def get_json(url: str, params: Mapping[str, Any] | None = None, timeout: float = 20.0,
              headers: Mapping[str, str] | None = None) -> Any:
     full = build_url(url, params)
     with _open(full, timeout, headers) as resp:
-        raw = resp.read()
+        raw = _read(resp, full)
     try:
         return json.loads(raw.decode("utf-8", "replace"))
     except ValueError as exc:
@@ -48,7 +56,7 @@ def get_json(url: str, params: Mapping[str, Any] | None = None, timeout: float =
 def get_bytes(url: str, timeout: float = 10.0, max_bytes: int = 5_000_000) -> tuple[bytes, str]:
     """Download a small file (cover art). Returns (content, content-type)."""
     with _open(url, timeout, None) as resp:
-        body = resp.read(max_bytes + 1)
+        body = _read(resp, url, max_bytes + 1)
         ctype = str(resp.headers.get("Content-Type", "")).split(";")[0].strip()
     if len(body) > max_bytes:
         raise StoreError("provider_error", f"{_host(url)}: file larger than {max_bytes} bytes")
