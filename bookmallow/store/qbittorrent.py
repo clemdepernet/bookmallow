@@ -12,6 +12,7 @@ from typing import Callable
 from .http import USER_AGENT
 from .models import StoreError
 
+LOGIN = "/api/v2/auth/login"
 Transport = Callable[[str, str, dict | None, dict], tuple[int, str]]
 
 
@@ -59,7 +60,12 @@ class QbtClient:
 
     def _call(self, path: str, data: dict | None = None, ok_statuses: tuple[int, ...] = (200, 204)) -> str:
         headers = {"User-Agent": USER_AGENT, "Referer": self.base_url, "Origin": self.base_url}
-        status, body = self._transport("POST" if data is not None else "GET", f"{self.base_url}{path}", data, headers)
+        method, url = "POST" if data is not None else "GET", f"{self.base_url}{path}"
+        status, body = self._transport(method, url, data, headers)
+        if status in (401, 403) and path != LOGIN:
+            # The session cookie dies when qBittorrent restarts during a long download: log in again, retry once.
+            self.login()
+            status, body = self._transport(method, url, data, headers)
         if status in (401, 403):
             raise QbtError("qbt_auth", f"qBittorrent refused the credentials or session ({status})")
         if status not in ok_statuses:
@@ -69,7 +75,7 @@ class QbtClient:
     # ---- API ---------------------------------------------------------------------------------
 
     def login(self) -> None:
-        body = self._call("/api/v2/auth/login", {"username": self._user, "password": self._password})
+        body = self._call(LOGIN, {"username": self._user, "password": self._password})
         if body.strip() not in ("", "Ok."):  # 5.x answers 204 with an empty body, 4.x answers 200 "Ok."
             raise QbtError("qbt_auth", "qBittorrent login refused")
 
@@ -87,6 +93,8 @@ class QbtClient:
             items = json.loads(body or "[]")
         except ValueError as exc:
             raise QbtError("provider_error", "qBittorrent returned unreadable JSON") from exc
+        if not isinstance(items, list):
+            raise QbtError("provider_error", "qBittorrent returned an unexpected torrent list")
         return [TorrentInfo.from_dict(i) for i in items if isinstance(i, dict)]
 
     def find_by_tag(self, tag: str) -> TorrentInfo | None:

@@ -93,3 +93,43 @@ def test_default_transport_uses_cookie_jar_opener(monkeypatch):
     c.login()
     assert seen["url"] == "http://qbt:8080/api/v2/auth/login" and seen["timeout"] == 3.0
     assert b"username=u" in seen["data"] and b"password=p" in seen["data"]
+
+
+def test_expired_session_logs_in_again_and_retries_once():
+    t = Script([(403, "Forbidden"), (200, "Ok."), (200, json.dumps(INFO))])
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=t)
+    assert c.info("abc").hash == "abc"
+    assert [call[1] for call in t.calls] == ["http://qbt:8080/api/v2/torrents/info?hashes=abc",
+                                             "http://qbt:8080/api/v2/auth/login",
+                                             "http://qbt:8080/api/v2/torrents/info?hashes=abc"]
+
+
+def test_retry_keeps_method_and_data():
+    t = Script([(401, ""), (204, ""), (200, "")])
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=t)
+    c.delete("abc")
+    assert t.calls[2][0] == "POST" and t.calls[2][2] == {"hashes": "abc", "deleteFiles": "true"}
+
+
+def test_still_refused_after_relogin_is_qbt_auth():
+    t = Script([(403, "Forbidden"), (200, "Ok."), (403, "Forbidden")])
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=t)
+    with pytest.raises(qb.QbtError) as exc:
+        c.info("abc")
+    assert exc.value.code == "qbt_auth" and len(t.calls) == 3
+
+
+def test_relogin_refused_is_qbt_auth_without_loop():
+    t = Script([(403, "Forbidden"), (403, "Forbidden")])
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=t)
+    with pytest.raises(qb.QbtError) as exc:
+        c.info("abc")
+    assert exc.value.code == "qbt_auth" and len(t.calls) == 2
+
+
+@pytest.mark.parametrize("body", ['{"hash": "abc"}', '"x"', "3"])
+def test_infos_rejects_non_list_json(body):
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=Script([(200, body)]))
+    with pytest.raises(qb.QbtError) as exc:
+        c.info("abc")
+    assert exc.value.code == "provider_error"

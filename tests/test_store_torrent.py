@@ -126,6 +126,16 @@ def test_wait_reports_progress_then_finishes(tconfig):
     assert done.progress == 1.0 and seen == [10.0, 30.0, 50.0]
 
 
+@pytest.mark.parametrize("busy", ["moving", "checkingResumeData", "allocating", "metaDL"])
+def test_wait_keeps_polling_while_moving_at_full_progress(tconfig, busy):
+    seen = []
+    client = FakeClient([info(1.0, busy), info(1.0, busy, path="/downloads/tmp/Book"), info(1.0, "stalledUP")])
+    acq, clock = make(client, tconfig, on_progress=seen.append)
+    acq.hash = "h1"
+    done = acq.wait()
+    assert done.state == "stalledUP" and client.infos == [] and seen == [50.0, 50.0, 50.0] and clock.t == 10.0
+
+
 def test_wait_error_state_and_vanished(tconfig):
     acq, _ = make(FakeClient([info(0.1, "error")]), tconfig)
     acq.hash = "h1"

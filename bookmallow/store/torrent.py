@@ -18,6 +18,8 @@ log = logging.getLogger(__name__)
 AUDIO_EXT = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wma"}
 FINISHED_STATES = {"uploading", "stalledUP", "queuedUP", "pausedUP", "stoppedUP", "forcedUP", "checkingUP"}
 ERROR_STATES = {"error", "missingFiles"}
+# Not finished even at 100 %: files are being moved out of an incomplete/temp dir, or not checked/allocated yet.
+BUSY_STATES = {"moving", "checkingResumeData", "allocating", "metaDL"}
 Prober = Callable[[Path], tuple[float | None, str | None]]
 
 
@@ -107,7 +109,7 @@ class TorrentAcquisition:
                 raise QbtError("torrent_error", "the torrent vanished from qBittorrent")
             if info.state in ERROR_STATES:
                 raise QbtError("torrent_error", f"qBittorrent state {info.state}")
-            if info.progress >= 1.0 or info.state in FINISHED_STATES:
+            if info.state not in BUSY_STATES and (info.progress >= 1.0 or info.state in FINISHED_STATES):
                 self._on_progress(50.0)
                 return info
             now = self._clock()

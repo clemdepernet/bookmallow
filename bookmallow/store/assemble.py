@@ -20,6 +20,10 @@ from .models import StoreError, Track
 
 log = logging.getLogger(__name__)
 PROTOCOLS = "file,http,https,tcp,tls,crypto"
+# ffconcat `option` lines for remote tracks: a read timeout (no hang on a half-open connection) and reconnects
+# on network errors, 429 and 5xx (a transient archive.org 503 must not kill a 10-hour book).
+HTTP_OPTIONS = (("rw_timeout", "30000000"), ("reconnect", "1"), ("reconnect_on_network_error", "1"),
+                ("reconnect_on_http_error", "429,5xx"), ("reconnect_delay_max", "60"))
 _COVER_NAMES = {"image/jpeg": "cover.jpg", "image/jpg": "cover.jpg", "image/png": "cover.png"}
 
 
@@ -51,6 +55,8 @@ def concat_list(tracks: list[Track]) -> str:
     lines = ["ffconcat version 1.0"]
     for t in tracks:
         lines.append("file '" + t.location.replace("'", "'\\''") + "'")
+        if t.location.lower().startswith(("http://", "https://")):
+            lines += [f"option {name} {value}" for name, value in HTTP_OPTIONS]
     return "\n".join(lines) + "\n"
 
 

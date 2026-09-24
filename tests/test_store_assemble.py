@@ -70,6 +70,14 @@ def test_concat_list_escapes_quotes():
     assert "file 'https://archive.org/download/x/b'\\''s.mp3'" in text
 
 
+def test_concat_list_adds_http_options_to_remote_tracks_only():
+    lines = asm.concat_list([Track("https://a/1.mp3", 1.0), Track("/incoming/Book/02.mp3", 1.0), Track("HTTP://b/3.mp3")]).splitlines()
+    options = ["option rw_timeout 30000000", "option reconnect 1", "option reconnect_on_network_error 1",
+               "option reconnect_on_http_error 429,5xx", "option reconnect_delay_max 60"]
+    assert lines == ["ffconcat version 1.0", "file 'https://a/1.mp3'", *options, "file '/incoming/Book/02.mp3'",
+                     "file 'HTTP://b/3.mp3'", *options]
+
+
 def test_chapters_from_tracks():
     assert asm.chapters_from_tracks(TRACKS) == [{"title": "Un", "start": 0.0, "end": 10.0}, {"title": "Deux", "start": 10.0, "end": 15.5}]
     assert asm.chapters_from_tracks([Track("u", None, "x")]) == []
