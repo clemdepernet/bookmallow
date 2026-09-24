@@ -33,13 +33,16 @@ class FakeProc:
 
 
 def fake_popen(progress=b"out_time_us=7500000\nprogress=end\n", rc=0, write=True):
+    """`rc` may be a list: one exit code per successive ffmpeg run."""
     calls = []
+    codes = list(rc) if isinstance(rc, (list, tuple)) else None
 
     def popen(cmd, **kw):
         calls.append((cmd, kw))
         if write:
             Path(cmd[-1]).write_bytes(b"m4b")
-        return FakeProc(cmd, progress, rc)
+        code = codes.pop(0) if codes is not None else rc
+        return FakeProc(cmd, progress if "-progress" in cmd else b"", code)
 
     popen.calls = calls
     return popen
@@ -50,7 +53,7 @@ def ok_cover(url, timeout=10.0, max_bytes=5_000_000):
 
 
 def test_procutil_helpers(tmp_path):
-    assert procutil.escape_ffmetadata("a=b;c#d\\e\nf") == "a\\=b\;c\\#d\\\\e\\\nf"
+    assert procutil.escape_ffmetadata("a=b;c#d\\e\nf") == "a\\=b\\;c\\#d\\\\e\\\nf"
     assert procutil.parse_progress_line("out_time_us=1500000") == 1_500_000 and procutil.parse_progress_line("x") is None
     assert procutil.progress_percent(50_000_000, 100) == 50.0
     p = tmp_path / "gone"
@@ -80,20 +83,37 @@ def test_ffmetadata_has_tags_and_chapters(tmp_path):
     assert text.count("[CHAPTER]") == 2 and "START=10000\nEND=15500\ntitle=Deux" in text
 
 
-def test_ffmpeg_command_reencode_with_cover(tmp_path):
+def test_ffmpeg_command_reencode_has_no_cover_stream(tmp_path):
     r = req(tmp_path)
-    cmd = asm.ffmpeg_command(r, tmp_path / "list.txt", tmp_path / "meta.ffm", tmp_path / "cover.jpg")
+    cmd = asm.ffmpeg_command(r, tmp_path / "list.txt", tmp_path / "meta.ffm")
     assert cmd[0] == "ffmpeg" and cmd[cmd.index("-protocol_whitelist") + 1] == "file,http,https,tcp,tls,crypto"
     assert cmd[cmd.index("-f") + 1] == "concat" and "-safe" in cmd
-    assert cmd.count("-i") == 3 and "-map_chapters" in cmd and "-disposition:v" in cmd and "attached_pic" in cmd
+    assert cmd.count("-i") == 2 and "-map_chapters" in cmd and "2:v" not in cmd and "attached_pic" not in cmd
+    assert cmd[cmd.index("-map") + 1] == "0:a"
     assert cmd[cmd.index("-c:a") + 1] == "aac" and cmd[cmd.index("-b:a") + 1] == "64k" and cmd[cmd.index("-ac") + 1] == "1"
     assert "+faststart" in cmd and cmd[-2:] == ["ipod", str(tmp_path / "Livre [Auteur].part.m4b")]
     assert cmd[cmd.index("-progress") + 1] == "pipe:1"
 
 
-def test_ffmpeg_command_copy_without_cover(tmp_path):
-    cmd = asm.ffmpeg_command(req(tmp_path, copy_audio=True, cover=None), tmp_path / "l", tmp_path / "m", None)
+def test_ffmpeg_command_copy(tmp_path):
+    cmd = asm.ffmpeg_command(req(tmp_path, copy_audio=True, cover=None), tmp_path / "l", tmp_path / "m")
     assert cmd.count("-i") == 2 and cmd[cmd.index("-c:a") + 1] == "copy" and "-b:a" not in cmd and "attached_pic" not in cmd
+
+
+def test_remux_cover_command(tmp_path):
+    part, cover, out = tmp_path / "a.part.m4b", tmp_path / "cover.jpg", tmp_path / "a.part.cover.m4b"
+    cmd = asm.remux_cover_command(part, cover, out)
+    assert cmd[:5] == ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error"]
+    assert cmd[cmd.index("-i") + 1] == str(part) and cmd.count("-i") == 2 and str(cover) in cmd
+    maps = [cmd[i + 1] for i, a in enumerate(cmd) if a == "-map"]
+    assert maps == ["0:a", "1:v"] and cmd[cmd.index("-c") + 1] == "copy"
+    assert cmd[cmd.index("-disposition:v") + 1] == "attached_pic" and "+faststart" in cmd and "-progress" not in cmd
+    assert cmd[-3:] == ["-f", "ipod", str(out)]
+
+
+def test_cover_part_path_is_partial(tmp_path):
+    r = req(tmp_path)
+    assert r.cover_part_path.name == "Livre [Auteur].part.cover.m4b" and ".part." in r.cover_part_path.name
 
 
 def test_cover_filename():
@@ -101,17 +121,28 @@ def test_cover_filename():
     assert asm.cover_filename("text/html") is None
 
 
-def test_run_success_downloads_cover_reports_progress_and_cleans_work_dir(tmp_path):
+def test_run_with_cover_encodes_then_remuxes(tmp_path):
     popen = fake_popen()
     r = req(tmp_path)
     seen = []
     asm.Assembly(r, on_progress=seen.append, popen=popen, fetch_bytes=ok_cover).run()
-    assert r.out_path.exists() and not r.part_path.exists()
-    assert seen == [50.0]
-    cmd, kw = popen.calls[0]
-    assert kw["start_new_session"] is True and kw["stdout"] is subprocess.PIPE
-    assert any(str(a).endswith("cover.jpg") for a in cmd) and any(str(a).endswith("list.txt") for a in cmd)
+    assert r.out_path.exists() and not r.part_path.exists() and not r.cover_part_path.exists()
+    assert seen == [50.0]  # progress comes from the audio pass only
+    assert len(popen.calls) == 2
+    (enc, kw), (remux, kw2) = popen.calls
+    assert kw["start_new_session"] is True and kw["stdout"] is subprocess.PIPE and kw2["start_new_session"] is True
+    assert any(str(a).endswith("list.txt") for a in enc) and not any(str(a).endswith("cover.jpg") for a in enc)
+    assert enc[-1] == str(r.part_path)
+    assert remux[remux.index("-i") + 1] == str(r.part_path) and any(str(a).endswith("cover.jpg") for a in remux)
+    assert remux[-1] == str(r.cover_part_path)
     assert not r.work_dir.exists()
+
+
+def test_run_without_cover_is_one_pass(tmp_path):
+    popen = fake_popen()
+    r = req(tmp_path, cover=None)
+    asm.Assembly(r, popen=popen, fetch_bytes=ok_cover).run()
+    assert len(popen.calls) == 1 and r.out_path.exists() and not r.part_path.exists()
 
 
 def test_run_without_cover_when_download_fails(tmp_path):
@@ -119,7 +150,7 @@ def test_run_without_cover_when_download_fails(tmp_path):
         raise StoreError("provider_error", "nope")
     popen = fake_popen()
     asm.Assembly(req(tmp_path), popen=popen, fetch_bytes=bad_cover).run()
-    assert "attached_pic" not in popen.calls[0][0]
+    assert len(popen.calls) == 1 and "attached_pic" not in popen.calls[0][0]
 
 
 def test_run_uses_local_cover_path(tmp_path):
@@ -127,7 +158,30 @@ def test_run_uses_local_cover_path(tmp_path):
     local.write_bytes(b"jpg")
     popen = fake_popen()
     asm.Assembly(req(tmp_path, cover=str(local)), popen=popen, fetch_bytes=None).run()
-    assert str(local) in popen.calls[0][0]
+    assert len(popen.calls) == 2 and str(local) in popen.calls[1][0] and str(local) not in popen.calls[0][0]
+
+
+def test_run_remux_failure_removes_both_partials(tmp_path):
+    r = req(tmp_path)
+    with pytest.raises(ConversionError) as exc:
+        asm.Assembly(r, popen=fake_popen(rc=[0, 1]), fetch_bytes=ok_cover).run()
+    assert exc.value.code == "ffmpeg" and exc.value.detail == "err line"
+    assert not r.part_path.exists() and not r.cover_part_path.exists() and not r.out_path.exists()
+    assert not r.work_dir.exists()
+
+
+def test_cancel_between_passes_skips_remux(tmp_path):
+    popen = fake_popen()
+    r = req(tmp_path)
+    holder = {}
+
+    def on_progress(p):
+        holder["a"].cancel()
+
+    holder["a"] = asm.Assembly(r, on_progress=on_progress, popen=popen, fetch_bytes=ok_cover, kill_grace=0.01)
+    with pytest.raises(Cancelled):
+        holder["a"].run()
+    assert len(popen.calls) == 1 and not r.part_path.exists() and not r.out_path.exists()
 
 
 def test_run_failure_removes_part_and_keeps_tail(tmp_path):

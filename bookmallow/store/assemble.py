@@ -6,7 +6,7 @@ import os
 import shutil
 import subprocess
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -40,6 +40,11 @@ class AssembleRequest:
     @property
     def part_path(self) -> Path:
         return part_path(self.out_path)
+
+    @property
+    def cover_part_path(self) -> Path:
+        """Output of the cover remux pass; still a partial file for retention and startup cleanup."""
+        return self.out_path.with_name(self.out_path.stem + ".part.cover" + self.out_path.suffix)
 
 
 def concat_list(tracks: list[Track]) -> str:
@@ -76,15 +81,12 @@ def ffmetadata(req: AssembleRequest) -> str:
     return "\n".join(lines) + "\n"
 
 
-def ffmpeg_command(req: AssembleRequest, list_path: Path, meta_path: Path, cover_path: Path | None) -> list[str]:
+def ffmpeg_command(req: AssembleRequest, list_path: Path, meta_path: Path) -> list[str]:
+    """Pass 1: audio + metadata + chapters, no cover. A cover stream here would pin ffmpeg's `-progress`
+    to its single frame (the minimum across streams), so it is added by a separate remux pass."""
     cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
            "-protocol_whitelist", PROTOCOLS, "-f", "concat", "-safe", "0", "-i", str(list_path),
-           "-i", str(meta_path)]
-    if cover_path is not None:
-        cmd += ["-i", str(cover_path)]
-    cmd += ["-map", "0:a", "-map_metadata", "1", "-map_chapters", "1"]
-    if cover_path is not None:
-        cmd += ["-map", "2:v", "-c:v", "copy", "-disposition:v", "attached_pic"]
+           "-i", str(meta_path), "-map", "0:a", "-map_metadata", "1", "-map_chapters", "1"]
     if req.copy_audio:
         cmd += ["-c:a", "copy"]
     else:
@@ -93,12 +95,21 @@ def ffmpeg_command(req: AssembleRequest, list_path: Path, meta_path: Path, cover
     return cmd
 
 
+def remux_cover_command(part: Path, cover_path: Path, out_path: Path) -> list[str]:
+    """Pass 2: copy the pass-1 audio (chapters and tags follow) and attach the cover, no re-encoding.
+    Only `0:a` is mapped: the chapter text track of pass 1 reads back as a data stream the ipod muxer refuses."""
+    return ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", str(part), "-i", str(cover_path),
+            "-map", "0:a", "-map", "1:v", "-c", "copy", "-disposition:v", "attached_pic",
+            "-movflags", "+faststart", "-y", "-f", "ipod", str(out_path)]
+
+
 def cover_filename(content_type: str | None) -> str | None:
     return _COVER_NAMES.get((content_type or "").lower())
 
 
 class Assembly:
-    """One ffmpeg run producing the final M4B. `run()` blocks; `cancel()` may be called from any thread."""
+    """Produce the final M4B: one encoding ffmpeg run, plus a quick cover remux when there is a cover.
+    `run()` blocks; `cancel()` may be called from any thread."""
 
     def __init__(self, req: AssembleRequest, on_progress: Callable[[float], None] | None = None,
                  popen=subprocess.Popen, kill_grace: float = 5.0, fetch_bytes=get_bytes):
@@ -138,12 +149,35 @@ class Assembly:
         path.write_bytes(body)
         return path
 
+    def _ffmpeg(self, cmd: list[str], report: bool) -> None:
+        proc = self._popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            with self._lock:
+                self._procs = [proc]
+            if self._cancelled.is_set():
+                terminate_process_groups([proc], self._kill_grace)
+            tail = StderrTail(proc.stderr)
+            for raw in proc.stdout:
+                us = parse_progress_line(raw.decode("utf-8", "replace"))
+                if report and us is not None:
+                    self._on_progress(progress_percent(us, self.req.duration))
+            rc = proc.wait()
+            tail.join(timeout=2)
+            if self._cancelled.is_set():
+                raise Cancelled()
+            if rc != 0:
+                text = tail.text()
+                raise ConversionError("ffmpeg", last_line(text) or f"ffmpeg exited with {rc}", tail=text)
+        finally:
+            with self._lock:
+                self._procs = []
+            close_quietly(proc.stdout, proc.stderr)
+
     def run(self) -> None:
         req = self.req
         work = req.work_dir
         work.mkdir(parents=True, exist_ok=True)
         req.out_path.parent.mkdir(parents=True, exist_ok=True)
-        proc = None
         try:
             if self._cancelled.is_set():
                 raise Cancelled()
@@ -152,29 +186,16 @@ class Assembly:
             meta_path.write_text(ffmetadata(req), encoding="utf-8")
             cover_path = self._cover_path(work)
 
-            proc = self._popen(ffmpeg_command(req, list_path, meta_path, cover_path),
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
-            with self._lock:
-                self._procs = [proc]
-            if self._cancelled.is_set():
-                terminate_process_groups([proc], self._kill_grace)
-            tail = StderrTail(proc.stderr)
-            for raw in proc.stdout:
-                us = parse_progress_line(raw.decode("utf-8", "replace"))
-                if us is not None:
-                    self._on_progress(progress_percent(us, req.duration))
-            rc = proc.wait()
-            tail.join(timeout=2)
-            if self._cancelled.is_set():
-                raise Cancelled()
-            if rc != 0:
-                text = tail.text()
-                raise ConversionError("ffmpeg", last_line(text) or f"ffmpeg exited with {rc}", tail=text)
+            self._ffmpeg(ffmpeg_command(req, list_path, meta_path), report=True)
+            if cover_path is not None:
+                if self._cancelled.is_set():
+                    raise Cancelled()
+                self._ffmpeg(remux_cover_command(req.part_path, cover_path, req.cover_part_path), report=False)
+                os.replace(req.cover_part_path, req.part_path)
             os.replace(req.part_path, req.out_path)
         except BaseException:
             unlink_quietly(req.part_path)
+            unlink_quietly(req.cover_part_path)
             raise
         finally:
-            if proc is not None:
-                close_quietly(proc.stdout, proc.stderr)
             shutil.rmtree(work, ignore_errors=True)
