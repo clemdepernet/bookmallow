@@ -58,7 +58,9 @@ class QbtClient:
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise QbtError("provider_error", f"qBittorrent unreachable: {getattr(exc, 'reason', exc)}") from exc
 
-    def _call(self, path: str, data: dict | None = None, ok_statuses: tuple[int, ...] = (200, 204)) -> str:
+    def _call(self, path: str, data: dict | None = None, ok_statuses: tuple[int, ...] = ()) -> str:
+        """`ok_statuses` lists extra accepted codes (e.g. 409 for ensure_category); any 2xx is always accepted
+        (qBittorrent 5.x answers /torrents/add with 202 while metadata is still pending, not just 200/204)."""
         headers = {"User-Agent": USER_AGENT, "Referer": self.base_url, "Origin": self.base_url}
         method, url = "POST" if data is not None else "GET", f"{self.base_url}{path}"
         status, body = self._transport(method, url, data, headers)
@@ -68,7 +70,7 @@ class QbtClient:
             status, body = self._transport(method, url, data, headers)
         if status in (401, 403):
             raise QbtError("qbt_auth", f"qBittorrent refused the credentials or session ({status})")
-        if status not in ok_statuses:
+        if not (200 <= status < 300) and status not in ok_statuses:
             raise QbtError("provider_error", f"qBittorrent HTTP {status} on {path}: {body[:120]}")
         return body
 
@@ -80,12 +82,25 @@ class QbtClient:
             raise QbtError("qbt_auth", "qBittorrent login refused")
 
     def ensure_category(self, name: str) -> None:
-        self._call("/api/v2/torrents/createCategory", {"category": name, "savePath": ""}, ok_statuses=(200, 204, 409))
+        self._call("/api/v2/torrents/createCategory", {"category": name, "savePath": ""}, ok_statuses=(409,))
 
     def add(self, download: str, category: str, tags: list[str]) -> None:
+        # qBittorrent answers 200 "Ok."/"" (4.x/5.x) or 202 with a JSON summary (5.2+, metadata still pending);
+        # a JSON body with failure_count == 0 is success (added or pending), same as "Fails." vs. failure_count > 0.
         body = self._call("/api/v2/torrents/add", {"urls": download, "category": category, "tags": ",".join(tags)})
-        if body.strip() not in ("", "Ok."):
-            raise QbtError("torrent_add", f"qBittorrent answered {body.strip()[:80] or 'nothing'}")
+        text = body.strip()
+        if text in ("", "Ok."):
+            return
+        if text and text[0] in "{[":
+            try:
+                payload = json.loads(text)
+            except ValueError:
+                raise QbtError("torrent_add", f"qBittorrent answered {text[:80] or 'nothing'}")
+            if isinstance(payload, dict) and "failure_count" in payload:
+                if int(payload.get("failure_count") or 0) == 0:
+                    return
+                raise QbtError("torrent_add", f"qBittorrent reported {payload.get('failure_count')} failure(s)")
+        raise QbtError("torrent_add", f"qBittorrent answered {text[:80] or 'nothing'}")
 
     def _infos(self, query: str) -> list[TorrentInfo]:
         body = self._call(f"/api/v2/torrents/info?{query}")

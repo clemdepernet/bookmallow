@@ -69,6 +69,27 @@ def test_add_failure_and_http_errors():
     assert exc.value.code == "provider_error"
 
 
+def test_add_accepts_202_pending_metadata():
+    # qBittorrent 5.2.3: /torrents/add answers 202 with a JSON summary while metadata is still pending.
+    body = json.dumps({"added_torrent_ids": [], "failure_count": 0, "pending_count": 1, "success_count": 0})
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=Script([(202, body)]))
+    c.add("magnet:?xt=1", "bookmallow", ["bookmallow", "job-1"])  # must not raise
+
+
+def test_add_rejects_json_failure_count():
+    body = json.dumps({"failure_count": 1, "success_count": 0})
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=Script([(200, body)]))
+    with pytest.raises(qb.QbtError) as exc:
+        c.add("magnet:?xt=1", "cat", [])
+    assert exc.value.code == "torrent_add"
+
+
+@pytest.mark.parametrize("status", [200, 201, 202, 204])
+def test_call_accepts_any_2xx(status):
+    c = qb.QbtClient("http://qbt:8080", "u", "p", transport=Script([(status, "[]")]))
+    assert c.info("abc") is None  # any 2xx must not raise
+
+
 def test_default_transport_uses_cookie_jar_opener(monkeypatch):
     class Resp:
         status = 200
