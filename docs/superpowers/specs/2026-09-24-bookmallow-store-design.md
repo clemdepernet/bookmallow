@@ -184,7 +184,7 @@ Le volet torrent est actif si `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL` sont
 - **File** : cartes `kind=book` avec icône livre, auteur, source ; libellés d'état supplémentaires « Téléchargement du torrent… » et « Assemblage du M4B… ».
 - **Bibliothèque** : pastille « Livre » sur les M4B, auteur affiché, bouton « Télécharger » identique.
 - **i18n** : toutes les nouvelles chaînes en FR et EN, parité vérifiée par le test existant.
-- **CSP** : `img-src` étendu à `https://archive.org https://*.archive.org https://librivox.org https://*.librivox.org` et aux hôtes d'images renvoyés par Prowlarr sont ignorés (pas d'image pour les torrents).
+- **CSP** : `img-src` étendu à `https://archive.org https://*.archive.org https://librivox.org https://*.librivox.org` ; les images éventuelles des résultats Prowlarr ne sont pas affichées (icône livre à la place).
 
 ## 10. Erreurs
 
