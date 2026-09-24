@@ -21,4 +21,12 @@ services:
       # - MAX_DURATION_HOURS=0     # 0 = pas de limite / no limit
       # - YTDLP_AUTO_UPDATE=1      # met yt-dlp à jour au démarrage / update yt-dlp at start
       # - FORCE_HTTPS=1            # cookie Secure derrière un reverse proxy HTTPS
+      # ---- Magasin / Store (v1.1) ----
+      # - STORE_ENABLED=1
+      # - PROWLARR_URL=http://prowlarr:9696
+      # - PROWLARR_API_KEY=
+      # - QBT_URL=http://qbittorrent:8080
+      # - QBT_USER=
+      # - QBT_PASSWORD=
+      # - QBT_PATH_MAP=/downloads:/incoming     # + volume: /path/to/qbittorrent/downloads:/incoming:ro
     restart: unless-stopped

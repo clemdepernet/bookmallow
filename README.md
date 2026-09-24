@@ -44,6 +44,51 @@ Ouvre `http://<ton-serveur>:7843`. Les MP3 arrivent dans `./data`.
 | `LOG_LEVEL` | `INFO` | Niveau de log de gunicorn/Flask (`DEBUG`, `INFO`, `WARNING`…) |
 | `DATA_DIR` | `/data` | Dossier des MP3, de `state.json` et de `.secret` |
 
+### 📚 Magasin de livres audio (v1.1)
+
+<img src="docs/screenshot-store.png" width="720" alt="Bookmallow store tab">
+
+Le second onglet cherche des livres audio et les livre en **un seul fichier M4B** (chapitres, couverture), lisible par les apps de livres audio du téléphone.
+
+- **Sources libres, activées par défaut** : [LibriVox](https://librivox.org) et [Internet Archive](https://archive.org) (domaine public, lecteurs bénévoles, anglais très fourni, classiques français). Les chapitres sont lus en streaming par ffmpeg : aucun fichier intermédiaire.
+- **Tes indexeurs, en option** : si tu utilises déjà Prowlarr et qBittorrent, renseigne `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL`, `QBT_USER`, `QBT_PASSWORD`, monte le dossier de téléchargement de qBittorrent en lecture seule sur `/incoming` et place Bookmallow sur le même réseau Docker. Les résultats apparaissent avec un badge « Torrent » ; une fois le livre assemblé, le torrent et ses fichiers sont supprimés de qBittorrent. Ce que tu télécharges par cette voie relève de ta responsabilité.
+- Les livres suivent la **même rétention** que les MP3 : `MAX_FILES` compte tout.
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `STORE_ENABLED` | `1` | `0` masque l'onglet |
+| `STORE_LIBRIVOX` / `STORE_ARCHIVE` | `1` | Sources libres |
+| `PROWLARR_URL` / `PROWLARR_API_KEY` | vide | Prowlarr (ex. `http://prowlarr:9696`) |
+| `QBT_URL` / `QBT_USER` / `QBT_PASSWORD` | vide | qBittorrent WebUI (ex. `http://qbittorrent:8080`) |
+| `QBT_CATEGORY` | `bookmallow` | Catégorie qBittorrent utilisée (créée si absente) |
+| `QBT_PATH_MAP` | `/downloads:/incoming` | Chemin vu par qBittorrent : chemin vu par Bookmallow |
+| `TORRENT_STALL_HOURS` | `12` | Abandon d'un torrent sans progression |
+| `BOOK_BITRATE` | `64k` | Débit AAC du M4B |
+| `STORE_TIMEOUT_S` | `20` | Délai des appels aux sources |
+
+Exemple compose avec le volet torrent :
+
+```yaml
+services:
+  bookmallow:
+    image: ghcr.io/clemdepernet/bookmallow:latest
+    ports: ["7843:5000"]
+    volumes:
+      - ./data:/data
+      - /chemin/vers/downloads/qbittorrent:/incoming:ro
+    environment:
+      - PROWLARR_URL=http://prowlarr:9696
+      - PROWLARR_API_KEY=${PROWLARR_API_KEY}
+      - QBT_URL=http://qbittorrent:8080
+      - QBT_USER=${QBT_USER}
+      - QBT_PASSWORD=${QBT_PASSWORD}
+    networks: [medianet]
+networks:
+  medianet:
+    external: true
+    name: media-stack_medianet
+```
+
 ### Partager avec ses amies
 
 Mets un `APP_PASSWORD`, puis expose le port 7843 avec ton reverse proxy habituel (Nginx Proxy Manager, Caddy, Traefik) ou un tunnel Cloudflare. Bookmallow n'accepte que des liens YouTube et ne convertit qu'une vidéo à la fois : même partagé, il reste sage avec ton Pi. Attention : il n'y a **aucune limitation de tentatives** sur `/login` ; si tu exposes l'app sur Internet, mets une protection devant (Cloudflare Access, une liste d'accès dans Nginx Proxy Manager, ou fail2ban) et active `FORCE_HTTPS=1` derrière un reverse proxy TLS.
@@ -100,6 +145,49 @@ Open `http://<your-server>:7843`. MP3s land in `./data`.
 | `SECRET_KEY` | generated | Session key, persisted in `/data/.secret` |
 | `LOG_LEVEL` | `INFO` | gunicorn/Flask log level (`DEBUG`, `INFO`, `WARNING`…) |
 | `DATA_DIR` | `/data` | Folder for the MP3s, `state.json` and `.secret` |
+
+### 📚 Audiobook store (v1.1)
+
+The second tab searches audiobooks and delivers each one as **a single M4B file** (chapters, cover art) that phone audiobook apps understand.
+
+- **Free sources, on by default**: [LibriVox](https://librivox.org) and [Internet Archive](https://archive.org) (public domain, volunteer readers, huge English catalogue, French classics). Chapters are streamed straight into ffmpeg: no intermediate files.
+- **Your indexers, optional**: if you already run Prowlarr and qBittorrent, set `PROWLARR_URL`, `PROWLARR_API_KEY`, `QBT_URL`, `QBT_USER`, `QBT_PASSWORD`, mount qBittorrent's download folder read-only at `/incoming` and put Bookmallow on the same Docker network. Results show a "Torrent" badge; once a book is assembled, the torrent and its files are removed from qBittorrent. What you download this way is your responsibility.
+- Books follow the **same retention** as MP3s: `MAX_FILES` counts everything.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `STORE_ENABLED` | `1` | `0` hides the tab |
+| `STORE_LIBRIVOX` / `STORE_ARCHIVE` | `1` | Free sources |
+| `PROWLARR_URL` / `PROWLARR_API_KEY` | empty | Prowlarr (e.g. `http://prowlarr:9696`) |
+| `QBT_URL` / `QBT_USER` / `QBT_PASSWORD` | empty | qBittorrent WebUI (e.g. `http://qbittorrent:8080`) |
+| `QBT_CATEGORY` | `bookmallow` | qBittorrent category (created if missing) |
+| `QBT_PATH_MAP` | `/downloads:/incoming` | Path as seen by qBittorrent : path as seen by Bookmallow |
+| `TORRENT_STALL_HOURS` | `12` | Give up on a torrent without progress |
+| `BOOK_BITRATE` | `64k` | AAC bitrate of the M4B |
+| `STORE_TIMEOUT_S` | `20` | Timeout for source calls |
+
+Compose example with the torrent option:
+
+```yaml
+services:
+  bookmallow:
+    image: ghcr.io/clemdepernet/bookmallow:latest
+    ports: ["7843:5000"]
+    volumes:
+      - ./data:/data
+      - /path/to/qbittorrent/downloads:/incoming:ro
+    environment:
+      - PROWLARR_URL=http://prowlarr:9696
+      - PROWLARR_API_KEY=${PROWLARR_API_KEY}
+      - QBT_URL=http://qbittorrent:8080
+      - QBT_USER=${QBT_USER}
+      - QBT_PASSWORD=${QBT_PASSWORD}
+    networks: [medianet]
+networks:
+  medianet:
+    external: true
+    name: media-stack_medianet
+```
 
 ### Sharing with friends
 

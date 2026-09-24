@@ -334,6 +334,7 @@ ci-dessous documente l'écart avec les sections précédentes.
   aussi au sous-processus deno de `yt-dlp`), le comportement observable ne change pas.
 - **Plancher de version yt-dlp plutôt qu'épinglage** : `requirements.txt` fixe
   `yt-dlp[default]>=2026.1.1` (un plancher) et non une version exacte comme décrit en §13.
+- v1.1 : la bibliothèque contient aussi des M4B (magasin) ; voir la spec 2026-09-24.
   L'image étant reconstruite chaque semaine (§11, §13), ce choix est défendable et assumé ; en
   contrepartie, Dependabot n'ouvrira pas de PR pip tant que le plancher est satisfait.
 - **Aperçu de playlist plafonné à 200 entrées, jobs plafonnés à `MAX_FILES`** : la modale playlist
