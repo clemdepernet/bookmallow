@@ -381,6 +381,15 @@ def test_submit_book_dedupes_on_key(bq):
         bq.submit_book(LIBRI)
 
 
+def test_cancelled_queued_book_does_not_leak_result(bq):
+    job = bq.submit_book(LIBRI)
+    assert job.id in bq._results
+    assert bq.cancel(job.id) is True
+    assert job.id not in bq._results
+    assert bq.process_next(block=False) is True  # popped and skipped
+    assert job.id not in bq._results and FakeAssembly.instances == []
+
+
 def test_free_book_flow(bq):
     job = bq.submit_book(LIBRI)
     assert bq.process_next(block=False)

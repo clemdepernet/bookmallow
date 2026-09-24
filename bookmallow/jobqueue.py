@@ -160,6 +160,7 @@ class JobQueue:
                 return False
             job.status = Status.CANCELLED
             job.finished_at = now_iso()
+            self._results.pop(job_id, None)
             self._save()
             conv = self._current if self._current_id == job_id else None
         if conv is not None:
@@ -180,6 +181,7 @@ class JobQueue:
             return False
         job = self.get(job_id)
         if job is None or job.status is not Status.QUEUED:
+            self._results.pop(job_id, None)
             return True
         try:
             self._process(job)
