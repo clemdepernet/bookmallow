@@ -6,7 +6,6 @@ from pathlib import Path
 
 AUDIO_SUFFIXES = (".mp3", ".m4b")
 PART_MARK = ".part."
-PART_SUFFIX = ".part.mp3"  # historical name, still used by converter tests
 
 
 def stat_is_regular(st) -> bool:

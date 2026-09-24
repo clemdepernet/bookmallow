@@ -1,6 +1,7 @@
 """Single-worker FIFO queue driving metadata fetch, conversion and retention (spec §6.2–6.8)."""
 from __future__ import annotations
 
+import errno
 import logging
 import os
 import queue
@@ -13,6 +14,7 @@ from . import names, retention
 from .config import QUALITIES, Config
 from .converter import Cancelled, Conversion, ConversionError, ConvertRequest
 from .jobs import Job, Status, new_book_job, new_job, now_iso
+from .procutil import unlink_quietly
 from .state import StateStore
 from .store.assemble import AssembleRequest, Assembly
 from .store.models import BookPlan, SearchResult, StoreError
@@ -26,7 +28,7 @@ MB = 1024 * 1024
 
 class DuplicateJob(Exception):
     def __init__(self, job: Job):
-        super().__init__(f"video {job.video_id} is already queued")
+        super().__init__(f"job for {job.video_id} is already queued")
         self.job = job
 
 
@@ -44,7 +46,10 @@ def default_plan_for(source: str, source_id: str, config: Config) -> BookPlan:
     raise StoreError("store_disabled", f"no plan provider for source {source!r}")
 
 
-def estimate_book_bytes(duration: int | None, size_bytes: int | None, bitrate: str) -> int:
+def estimate_book_bytes(duration: int | None, size_bytes: int | None, bitrate: str, copy_audio: bool = False) -> int:
+    """Disk needed for the M4B: the sources' size when they are copied as-is, else duration × bitrate."""
+    if copy_audio and size_bytes:
+        return int(size_bytes * 1.05)
     kbps = int(bitrate.lower().rstrip("k") or 64)
     if duration:
         return int(duration * kbps * 1000 / 8 * 1.1)
@@ -307,7 +312,7 @@ class JobQueue:
                 job.duration = plan.duration or job.duration
                 job.cover = job.cover or plan.cover
                 job.thumbnail = job.cover
-                reason = self._guard_book(job, result)
+                reason = self._guard_book(job, result, copy_audio=copy_audio or single_file is not None)
             if reason is not None:
                 raise StoreError(*reason)
 
@@ -351,11 +356,12 @@ class JobQueue:
             if acq is not None:
                 acq.cleanup()
 
-    def _guard_book(self, job: Job, result: SearchResult | None) -> tuple[str, str] | None:
+    def _guard_book(self, job: Job, result: SearchResult | None, copy_audio: bool = False) -> tuple[str, str] | None:
         hours = self.config.max_duration_hours
         if hours > 0 and job.duration and job.duration > hours * 3600:
             return "too_long", f"longer than {hours:g} h"
-        need = estimate_book_bytes(job.duration, result.size_bytes if result else None, self.config.book_bitrate)
+        need = estimate_book_bytes(job.duration, result.size_bytes if result else None, self.config.book_bitrate,
+                                   copy_audio=copy_audio)
         free = self._disk_usage(str(self.config.data_dir)).free
         if free - need < self.config.min_free_mb * MB:
             return "no_space", f"about {need // MB} MB needed, {free // MB} MB free"
@@ -374,8 +380,13 @@ class JobQueue:
             job.status = Status.CONVERTING
             self._save()
         part = retention.part_path(out_path)
-        shutil.copyfile(src, part)
-        os.replace(part, out_path)
+        try:
+            shutil.copyfile(src, part)
+            os.replace(part, out_path)
+        except OSError as exc:
+            unlink_quietly(part)
+            code = "no_space" if exc.errno == errno.ENOSPC else "internal"
+            raise StoreError(code, f"could not copy the M4B: {exc.strerror or exc.__class__.__name__}") from exc
 
     def _progress(self, job: Job, percent: float) -> None:
         with self._lock:

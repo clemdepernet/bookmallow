@@ -130,6 +130,14 @@ def _bitrate(env: Mapping[str, str], name: str, default: str) -> str:
     return raw
 
 
+def _path_map(env: Mapping[str, str], name: str, default: str) -> str:
+    raw = env.get(name, "").strip() or default
+    remote, sep, local = raw.partition(":")
+    if not sep or not remote.strip() or not local.strip():
+        raise ConfigError(f"{name} must look like /downloads:/incoming (qBittorrent path:Bookmallow path), got {raw!r}")
+    return raw
+
+
 def _url(env: Mapping[str, str], name: str) -> str:
     return env.get(name, "").strip().rstrip("/")
 
@@ -176,7 +184,7 @@ def load(env: Mapping[str, str] | None = None) -> Config:
         qbt_user=env.get("QBT_USER", ""),
         qbt_password=env.get("QBT_PASSWORD", ""),
         qbt_category=env.get("QBT_CATEGORY", "").strip() or "bookmallow",
-        qbt_path_map=env.get("QBT_PATH_MAP", "").strip() or "/downloads:/incoming",
+        qbt_path_map=_path_map(env, "QBT_PATH_MAP", "/downloads:/incoming"),
         torrent_stall_hours=_float(env, "TORRENT_STALL_HOURS", 12.0, 0.1),
         book_bitrate=_bitrate(env, "BOOK_BITRATE", "64k"),
         store_timeout_s=_float(env, "STORE_TIMEOUT_S", 20.0, 1.0),

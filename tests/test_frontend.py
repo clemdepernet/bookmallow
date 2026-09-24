@@ -68,3 +68,9 @@ def test_i18n_has_both_languages_with_same_keys():
     en = re.search(r"\n    en: \{(.*?)\n    \},", js, re.S).group(1)
     keys = lambda block: set(re.findall(r"^\s+(\w+):", block, re.M))  # noqa: E731
     assert keys(fr) == keys(en) and len(keys(fr)) > 40
+
+
+def test_torrent_badge_hides_unknown_seeders():
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    assert "r.seeders ?? 0" not in js
+    assert 'r.seeders == null ? t("store_torrent")' in js

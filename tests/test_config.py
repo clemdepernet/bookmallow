@@ -76,7 +76,8 @@ def test_store_torrent_enabled_and_partial(tmp_path):
 
 
 @pytest.mark.parametrize("env", [{"BOOK_BITRATE": "64"}, {"BOOK_BITRATE": "abc"}, {"TORRENT_STALL_HOURS": "0"},
-                                 {"STORE_TIMEOUT_S": "0.5"}, {"STORE_ENABLED": "maybe"}])
+                                 {"STORE_TIMEOUT_S": "0.5"}, {"STORE_ENABLED": "maybe"},
+                                 {"QBT_PATH_MAP": "/downloads"}, {"QBT_PATH_MAP": ":/incoming"}, {"QBT_PATH_MAP": "/downloads:"}])
 def test_store_invalid_values_raise(tmp_path, env):
     with pytest.raises(cfg.ConfigError):
         cfg.load({"DATA_DIR": str(tmp_path), **env})

@@ -79,8 +79,8 @@ def test_natural_key_and_list_audio_files(tmp_path):
 def test_map_path():
     assert tq.map_path("/downloads/bookmallow/Book", ("/downloads", "/incoming")) == Path("/incoming/bookmallow/Book")
     assert tq.map_path("/downloads", ("/downloads", "/incoming")) == Path("/incoming")
-    assert tq.map_path("/elsewhere/x", ("/downloads", "/incoming")) == Path("/elsewhere/x")
-    assert tq.map_path("/downloadsX/y", ("/downloads", "/incoming")) == Path("/downloadsX/y")
+    assert tq.map_path("/elsewhere/x", ("/downloads", "/incoming")) is None
+    assert tq.map_path("/downloadsX/y", ("/downloads", "/incoming")) is None
 
 
 def test_ffprobe_parses_json_and_handles_failure(tmp_path):
@@ -208,6 +208,16 @@ def test_plan_mixed_codecs_single_m4b_and_no_audio(tconfig, tmp_path):
     assert exc.value.code == "no_audio"
 
 
+def test_plan_rejects_content_path_outside_path_map(tconfig, tmp_path, caplog):
+    (tmp_path / "a.mp3").write_bytes(b"x")  # exists locally, must not be scanned
+    probes = []
+    acq, _ = make(FakeClient([]), tconfig, prober=lambda p: probes.append(p) or (1.0, "mp3"))
+    with pytest.raises(StoreError) as exc:
+        acq.plan(info(1.0, "uploading", path=str(tmp_path)))
+    assert exc.value.code == "no_audio" and "outside QBT_PATH_MAP" in exc.value.detail and probes == []
+    assert "outside QBT_PATH_MAP" in caplog.text
+
+
 def test_plan_rejects_empty_content_path(tconfig):
     acq, _ = make(FakeClient([]), tconfig)
     with pytest.raises(StoreError) as exc:
@@ -235,4 +245,34 @@ def test_cleanup_deletes_with_files_and_swallows_errors(tconfig):
 
     acq, _ = make(Angry([]), tconfig)
     acq.hash = "h1"
+    acq.cleanup()  # logged, not raised
+
+
+def test_cleanup_finds_torrent_by_tag_when_hash_never_seen(tconfig):
+    client = FakeClient([], find_after=10**6)
+    acq, _ = make(client, tconfig, add_timeout=2.0)
+    with pytest.raises(QbtError):
+        acq.start()
+    assert acq.hash is None
+    client.find_after = 0  # the tag shows up late
+    acq.cleanup()
+    assert client.deleted == [("h1", True)]
+
+
+def test_cleanup_without_add_does_not_query(tconfig):
+    class NoCalls(FakeClient):
+        def find_by_tag(self, tag):
+            raise AssertionError("no torrent was added")
+
+    acq, _ = make(NoCalls([]), tconfig)
+    acq.cleanup()
+
+
+def test_cleanup_tag_lookup_error_is_logged(tconfig):
+    class Down(FakeClient):
+        def find_by_tag(self, tag):
+            raise QbtError("provider_error", "down")
+
+    acq, _ = make(Down([]), tconfig)
+    acq._add_sent = True
     acq.cleanup()  # logged, not raised

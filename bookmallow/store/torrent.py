@@ -23,12 +23,13 @@ BUSY_STATES = {"moving", "checkingResumeData", "allocating", "metaDL"}
 Prober = Callable[[Path], tuple[float | None, str | None]]
 
 
-def map_path(remote: str, path_map: tuple[str, str]) -> Path:
-    """Translate a path reported by qBittorrent into the path Bookmallow sees through its read-only mount."""
+def map_path(remote: str, path_map: tuple[str, str]) -> Path | None:
+    """Translate a path reported by qBittorrent into the path Bookmallow sees through its read-only mount;
+    None when the path is not under the mapped prefix (never scan Bookmallow's own filesystem instead)."""
     src, dst = path_map
     if remote == src or remote.startswith(src.rstrip("/") + "/"):
         return Path(dst + remote[len(src):])
-    return Path(remote)
+    return None
 
 
 def list_audio_files(root: Path) -> list[Path]:
@@ -72,6 +73,7 @@ class TorrentAcquisition:
         self._poll, self._add_timeout = poll_interval, add_timeout
         self._cancelled = threading.Event()
         self.hash: str | None = None
+        self._add_sent = False  # add() was sent: qBittorrent may hold the torrent even if we never saw its hash
         self.copy_audio = False
         self.single_file: Path | None = None
 
@@ -84,6 +86,7 @@ class TorrentAcquisition:
         self.client.login()
         self.client.ensure_category(self.config.qbt_category)
         tag = f"job-{self.job_id}"
+        self._add_sent = True
         self.client.add(self.result.download, self.config.qbt_category, ["bookmallow", tag])
         deadline = self._clock() + self._add_timeout
         while self._clock() < deadline:
@@ -124,6 +127,9 @@ class TorrentAcquisition:
         if not info.content_path:
             raise StoreError("no_audio", "qBittorrent reported no content path for this torrent")
         local = map_path(info.content_path, self.config.path_map)
+        if local is None:
+            log.warning("torrent content path %s is outside QBT_PATH_MAP (%s)", info.content_path, self.config.qbt_path_map)
+            raise StoreError("no_audio", f"content path {info.content_path} is outside QBT_PATH_MAP")
         files = list_audio_files(local)
         if not files:
             raise StoreError("no_audio", f"no audio files under {local}")
@@ -140,9 +146,14 @@ class TorrentAcquisition:
                         duration=duration, cover=None, tracks=tracks)
 
     def cleanup(self) -> None:
-        if not self.hash:
-            return
+        torrent_hash = self.hash
         try:
-            self.client.delete(self.hash, delete_files=True)
+            if not torrent_hash and self._add_sent:
+                # add() may have succeeded while the tag never showed up within add_timeout: look once more.
+                found = self.client.find_by_tag(f"job-{self.job_id}")
+                torrent_hash = found.hash if found is not None else None
+            if not torrent_hash:
+                return
+            self.client.delete(torrent_hash, delete_files=True)
         except StoreError as exc:
-            log.warning("could not delete torrent %s: %s", self.hash, exc.detail)
+            log.warning("could not delete torrent %s: %s", torrent_hash or f"tagged job-{self.job_id}", exc.detail)

@@ -318,7 +318,7 @@
     if (r.size_bytes) meta.push(el("span", { text: fmtSize(r.size_bytes) }));
     if (r.language) meta.push(el("span", { text: r.language.toUpperCase() }));
     const free = r.source !== "prowlarr";
-    const badge = el("span", { class: `badge ${free ? "free" : "torrent"}`, text: free ? t("store_free") : `${t("store_torrent")} · ${t("store_seeders", { n: r.seeders ?? 0 })}` });
+    const badge = el("span", { class: `badge ${free ? "free" : "torrent"}`, text: free ? t("store_free") : r.seeders == null ? t("store_torrent") : `${t("store_torrent")} · ${t("store_seeders", { n: r.seeders })}` });
     const actions = el("div", { class: "item-actions" }, [badge,
       el("button", { class: "btn primary small", type: "button", text: t("store_add"), onclick: (e) => addBook(r.key, e.currentTarget) })]);
     if (r.url) actions.append(el("a", { class: "btn ghost small", href: r.url, target: "_blank", rel: "noopener", text: "↗" }));

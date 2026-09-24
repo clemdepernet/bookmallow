@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import errno
+import os
 import shutil
 from collections import namedtuple
 from dataclasses import replace
@@ -372,6 +374,16 @@ def test_estimate_book_bytes():
     assert jq.estimate_book_bytes(3600, None, "64k") == int(3600 * 64 * 1000 / 8 * 1.1)
     assert jq.estimate_book_bytes(None, 5000, "64k") == 5500
     assert jq.estimate_book_bytes(None, None, "64k") == 0
+    # copied sources (AAC tracks, single M4B): the torrent's size, whatever the bitrate says
+    assert jq.estimate_book_bytes(3600, 10_000_000, "64k", copy_audio=True) == 10_500_000
+    assert jq.estimate_book_bytes(3600, None, "64k", copy_audio=True) == int(3600 * 64 * 1000 / 8 * 1.1)
+
+
+def test_duplicate_message_names_the_job_key(bq):
+    bq.submit_book(LIBRI)
+    with pytest.raises(jq.DuplicateJob) as exc:
+        bq.submit_book(LIBRI)
+    assert str(exc.value) == "job for librivox:904 is already queued"
 
 
 def test_submit_book_dedupes_on_key(bq):
@@ -464,6 +476,53 @@ def test_cancel_during_torrent_wait(bq):
     bq.process_next(block=False)
     assert bq.get(job.id).status is Status.CANCELLED and FakeTorrent.instances[0].cancelled and FakeTorrent.instances[0].cleaned
     assert not list(bq.config.data_dir.glob("*.m4b"))
+
+
+def test_cancel_during_torrent_start(bq):
+    job = bq.submit_book(TORR)
+
+    class CancellingTorrent(FakeTorrent):
+        def start(self):
+            assert bq.cancel(job.id) is True
+            return super().start()
+
+    bq._torrent_factory = CancellingTorrent
+    bq.process_next(block=False)
+    acq = FakeTorrent.instances[0]
+    assert bq.get(job.id).status is Status.CANCELLED and acq.cancelled and acq.cleaned
+    assert FakeAssembly.instances == [] and not list(bq.config.data_dir.glob("*.m4b"))
+
+
+@pytest.mark.parametrize("err, code", [(errno.ENOSPC, "no_space"), (errno.EACCES, "internal")])
+def test_single_m4b_copy_error_removes_partial(bq, tmp_path, monkeypatch, err, code):
+    (tmp_path / "incoming").mkdir()
+    src = tmp_path / "incoming" / "src.m4b"
+    src.write_bytes(b"ready")
+    FakeTorrent.behaviour, FakeTorrent.single_path = "single", src
+
+    def failing_copy(a, b):
+        Path(b).write_bytes(b"half")
+        raise OSError(err, os.strerror(err))
+
+    monkeypatch.setattr(jq.shutil, "copyfile", failing_copy)
+    job = bq.submit_book(TORR)
+    bq.process_next(block=False)
+    job = bq.get(job.id)
+    assert job.status is Status.FAILED and job.error_code == code and "could not copy" in job.error
+    assert not list(bq.config.data_dir.glob("*.m4b")) and src.exists() and FakeTorrent.instances[0].cleaned
+
+
+def test_copy_audio_disk_guard_uses_torrent_size(config):
+    cfg = replace(config, min_free_mb=1, prowlarr_url="http://p", prowlarr_api_key="k", qbt_url="http://q")
+    queue = jq.JobQueue(cfg, StateStore(cfg.state_path), fetch_video=meta_for, conversion_factory=FakeConversion,
+                        disk_usage=lambda path: Usage(10**9, 0, 3 * 1024 * 1024), plan_for=lambda s, sid, c: PLAN,
+                        assembly_factory=FakeAssembly, torrent_factory=FakeTorrent, qbt_client_factory=FakeQbt)
+    queue.recover()
+    FakeTorrent.behaviour = "ok"
+    # 3600 s at 64k would need ~31 MB; the AAC tracks are copied, so the 1 MB torrent is what counts
+    job = queue.submit_book(replace(TORR, size_bytes=1024 * 1024))
+    queue.process_next(block=False)
+    assert queue.get(job.id).status is Status.DONE
 
 
 def test_book_disk_guard_uses_size(config):
