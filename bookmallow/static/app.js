@@ -612,7 +612,23 @@
   $("#pl-add").addEventListener("click", () => submit({ playlist: "expand", video_ids: selectedPlaylistIds() }));
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
 
-  setTab(state.tab);
+  // ---- deep link (?tab=store&q=<text>&lang=fr|en|all) --------------------------------
+  // Lets a search be shared as a URL and lets a headless browser render the store tab
+  // with results already loaded. Values only ever land in .value / state, never in HTML.
+  const deepLinkParams = new URLSearchParams(location.search);
+  const deepLinkLang = deepLinkParams.get("lang");
+  if (["fr", "en", "all"].includes(deepLinkLang)) {
+    state.storeLang = deepLinkLang;
+    store.set("bookmallow.storeLang", deepLinkLang);
+  }
+  const deepLinkTab = deepLinkParams.get("tab");
+  if (deepLinkTab === "store" || deepLinkTab === "convert") setTab(deepLinkTab);
+  else setTab(state.tab);
   applyI18n();
   refresh();
+  const deepLinkQ = (deepLinkParams.get("q") || "").trim().slice(0, 100);
+  if (deepLinkQ) {
+    $("#store-q").value = deepLinkQ;
+    storeSearch();
+  }
 })();

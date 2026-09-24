@@ -74,3 +74,11 @@ def test_torrent_badge_hides_unknown_seeders():
     js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
     assert "r.seeders ?? 0" not in js
     assert 'r.seeders == null ? t("store_torrent")' in js
+
+
+def test_deep_link_reads_tab_and_query_params():
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    assert "URLSearchParams(location.search)" in js
+    assert 'deepLinkParams.get("tab")' in js
+    assert 'deepLinkParams.get("q")' in js
+    assert 'deepLinkParams.get("lang")' in js
