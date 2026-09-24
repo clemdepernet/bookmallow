@@ -198,6 +198,19 @@ def test_plan_mixed_codecs_single_m4b_and_no_audio(tconfig, tmp_path):
     assert exc.value.code == "no_audio"
 
 
+def test_plan_rejects_empty_content_path(tconfig):
+    acq, _ = make(FakeClient([]), tconfig)
+    with pytest.raises(StoreError) as exc:
+        acq.plan(info(1.0, "uploading", path=""))
+    assert exc.value.code == "no_audio"
+
+
+def test_wait_requires_start(tconfig):
+    acq, _ = make(FakeClient([]), tconfig)
+    with pytest.raises(RuntimeError):
+        acq.wait()
+
+
 def test_cleanup_deletes_with_files_and_swallows_errors(tconfig):
     client = FakeClient([])
     acq, _ = make(client, tconfig)

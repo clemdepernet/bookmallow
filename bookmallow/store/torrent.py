@@ -101,7 +101,8 @@ class TorrentAcquisition:
         raise QbtError("torrent_add", "the torrent did not appear in qBittorrent")
 
     def wait(self) -> TorrentInfo:
-        assert self.hash, "start() first"
+        if not self.hash:
+            raise RuntimeError("TorrentAcquisition.wait() called before start()")
         last_bytes, last_change = -1, self._clock()
         stall_after = self.config.torrent_stall_hours * 3600
         while True:
@@ -124,6 +125,8 @@ class TorrentAcquisition:
             self._sleep(self._poll)
 
     def plan(self, info: TorrentInfo) -> BookPlan:
+        if not info.content_path:
+            raise StoreError("no_audio", "qBittorrent reported no content path for this torrent")
         local = map_path(info.content_path, self.config.path_map)
         files = list_audio_files(local)
         if not files:
