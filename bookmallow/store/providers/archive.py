@@ -15,7 +15,7 @@ IMG = "https://archive.org/services/img/"
 COLLECTIONS = "(collection:librivoxaudio OR collection:audio_bookspoetry)"
 LANG_QUERY = {"fr": "(fre OR fra OR french)", "en": "(eng OR english)"}
 FIELDS = ["identifier", "title", "creator", "language", "runtime"]
-_LUCENE = re.compile(r'([+\-!(){}\[\]^"~*?:\\/])')
+_LUCENE = re.compile(r'([+\-!(){}\[\]^"~*?:\\/&|])')
 _BITRATE = re.compile(r"_(\d{2,3}kb|vbr)$", re.I)
 Fetch = Callable[..., object]
 

@@ -92,3 +92,4 @@ def test_plan_errors():
 
 def test_escape_lucene():
     assert ia.escape_lucene('a:b "c" (d) e/f') == r'a\:b \"c\" \(d\) e\/f'
+    assert ia.escape_lucene("rock && roll || jazz") == r"rock \&\& roll \|\| jazz"
